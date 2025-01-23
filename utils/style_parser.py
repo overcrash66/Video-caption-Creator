@@ -1,41 +1,67 @@
 import re
 from typing import Dict
+import logging
 
 class StyleParser:
     def __init__(self):
-        self.tag_pattern = re.compile(r'(<[^>]+>|<\/[^>]+>|[^<]+)')
+        self.tag_pattern = re.compile(r'(<[^>]+>|</[^>]+>|[^<]+)')
+        self.font_pattern = re.compile(r"<font\s+([^>]*)>", re.IGNORECASE)
+        self.attr_pattern = re.compile(r"(\w+)=['\"]([^'\"]*)['\"]", re.IGNORECASE)
+        self.style_tags = {'b', 'i', 'center', 'font'}
 
     def parse(self, text: str) -> Dict:
         styles = {'parts': [], 'current_style': {}}
+        tag_stack = []
+        style_stack = []
         for segment in self.tag_pattern.findall(text):
-            self.process_segment(segment, styles)
+            if segment.startswith('<'):
+                self.process_tag(segment, styles, tag_stack, style_stack)
+            else:
+                styles['parts'].append({
+                    'text': segment,
+                    'style': styles['current_style'].copy()
+                })
         return styles
 
-    def process_segment(self, segment: str, styles: Dict):
-        if segment.startswith('<b>'):
-            styles['current_style']['bold'] = True
-        elif segment.startswith('</b>'):
-            styles['current_style'].pop('bold', None)
-        elif segment.startswith('<i>'):
-            styles['current_style']['italic'] = True
-        elif segment.startswith('</i>'):
-            styles['current_style'].pop('italic', None)
-        elif segment.startswith('<font'):
-            self.process_font_tag(segment, styles)
-        elif segment.startswith('</font>'):
-            styles['current_style'].pop('size', None)
-            styles['current_style'].pop('face', None)
+    def process_tag(self, tag: str, styles: Dict, tag_stack: list, style_stack: list):
+        tag_lower = tag.lower()
+        if tag_lower.startswith('</'):
+            closing_tag = tag_lower[2:-1]
+            if closing_tag in self.style_tags:
+                if tag_stack and tag_stack[-1] == closing_tag:
+                    tag_stack.pop()
+                    if style_stack:
+                        styles['current_style'] = style_stack.pop()
         else:
-            styles['parts'].append({
-                'text': segment,
-                'style': styles['current_style'].copy()
-            })
+            tag_name = tag_lower[1:-1].split()[0]
+            if tag_name in self.style_tags:
+                style_stack.append(styles['current_style'].copy())
+                self.apply_style(tag, tag_name, styles)
+                tag_stack.append(tag_name)
 
-    def process_font_tag(self, tag: str, styles: Dict):
-        size_match = re.search(r"size=['\"](\d+)['\"]", tag)
-        if size_match:
-            styles['current_style']['size'] = int(size_match.group(1))
-        
-        face_match = re.search(r"face=['\"](.+?)['\"]", tag)
-        if face_match:
-            styles['current_style']['face'] = face_match.group(1)
+    def apply_style(self, tag: str, tag_name: str, styles: Dict):
+        tag_lower = tag.lower()
+        if tag_name == 'b':
+            styles['current_style']['bold'] = True
+        elif tag_name == 'i':
+            styles['current_style']['italic'] = True
+        elif tag_name == 'center':
+            styles['current_style']['align'] = 'center'
+        elif tag_name == 'font':
+            attrs = self.parse_font_attributes(tag_lower)
+            styles['current_style'].update(attrs)
+        logging.debug(f"Applied style: {styles['current_style']}")
+
+    def parse_font_attributes(self, tag: str) -> Dict:
+        attrs = {}
+        match = self.font_pattern.search(tag)
+        if match:
+            for name, value in self.attr_pattern.findall(match.group(1)):
+                name_lower = name.lower()
+                value = value.strip()
+                if name_lower == 'size':
+                    if value.isdigit():
+                        attrs['size'] = int(value)
+                elif name_lower == 'face':
+                    attrs['face'] = value
+        return attrs

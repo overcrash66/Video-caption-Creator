@@ -1,231 +1,266 @@
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageColor, ImageOps
 import html
 import logging
 import os
 from typing import Dict, List, Optional
 from utils.style_parser import StyleParser
-from concurrent import futures
 
 class ImageGenerator:
     def __init__(self, temp_manager, style_parser: StyleParser, settings: dict):
         self.temp_manager = temp_manager
         self.style_parser = style_parser
         self.settings = settings.copy()
-    
-    def create_base_image(self) -> Image.Image:
-        """Create base image using stored settings"""
-        bg_image = self.settings.get('background_image')
-        bg_color = self.settings.get('bg_color', '#000000')
-        
-        if bg_image:
-            try:
-                img = Image.open(bg_image)
-                return img.convert('RGB').resize((1280, 720))
-            except Exception as e:
-                logging.error(f"Background image error: {str(e)}")
-        return Image.new('RGB', (1280, 720), bg_color)
+        self.font_cache = {}
 
     def generate_images(self, entries: List[Dict]) -> List[Dict]:
-        generated = []
+        generated = [None] * len(entries)  # Pre-allocate to maintain positions
+        
         for idx, entry in enumerate(entries):
-            if self.has_style_tags(entry['text']):
-                img_info = self.generate_styled_image(entry, idx)
-            else:
-                img_info = self.generate_simple_image(entry, idx)
-            if img_info:
-                generated.append(img_info)
-        return generated
+            try:
+                if self._has_style_tags(entry['text']):
+                    img_info = self.generate_styled_image(entry, idx)
+                else:
+                    img_info = self.generate_simple_image(entry, idx)
+                
+                if img_info and self._validate_image(img_info['path']):
+                    generated[idx] = img_info  # Maintain original index position
+            except Exception as e:
+                logging.error(f"Image generation failed for entry {idx}: {str(e)}")
+        
+        return [img for img in generated if img is not None]  # Filter out failures
 
-    def generate_preview(self, text: str, preview_settings: Dict) -> Image.Image:
+    def generate_preview(self, text: str) -> Image.Image:
         img = self.create_base_image()
         draw = ImageDraw.Draw(img)
-        y = 10
+        y = self.settings.get('margin', 20)
         
         styled_parts = self.style_parser.parse(text)['parts']
         for part in styled_parts:
             font = self.get_font(
                 part['style'].get('face', 'Arial'),
-                part['style'].get('size', preview_settings['font_size']),
+                part['style'].get('size', self.settings.get('font_size', 24)),
                 part['style'].get('bold', False),
-                part['style'].get('italic', False),
-                preview_settings.get('custom_font')
+                part['style'].get('italic', False)
             )
             
-            if preview_settings.get('text_shadow', False):
-                self.draw_text_with_shadow(draw, part['text'], (20, y), font, preview_settings)
+            if self.settings.get('text_shadow', False):
+                self.draw_text_shadow(draw, part['text'], (20, y), font)
                 
-            if preview_settings.get('text_border', False):
+            if self.settings.get('text_border', True):
                 self.draw_text_border(draw, part['text'], (20, y), font)
                 
-            draw.text((20, y), part['text'], font=font, fill=preview_settings.get('text_color', '#FFFFFF'))
+            draw.text((20, y), part['text'], font=font, 
+                     fill=self.settings.get('text_color', '#FFFFFF'))
             y += font.getbbox(part['text'])[3] + 5
             
         return img
 
     def generate_simple_image(self, entry: Dict, idx: int) -> Optional[Dict]:
         try:
-            margin = self.settings.get('margin', 20)
-            font_size = self.settings.get('font_size', 24)
-            text_color = self.settings.get('text_color', '#FFFFFF')
-            speed_factor = self.settings.get('speed_factor', 1.0)
-            custom_font = self.settings.get('custom_font')
-            
-            img = self.create_base_image()
+            img = self.create_base_image().convert('RGB')
             draw = ImageDraw.Draw(img)
-
             text = html.unescape(entry['text'])
-            font = self.get_font('Arial', font_size, False, False, custom_font)
+            font_size = self.settings.get('font_size', 24)
+            margin = self.settings.get('margin', 20)
             
-            border_offset = 4
-            max_width = 1280 - (margin * 2) - border_offset
-            max_height = 720 - (margin * 2) - border_offset
+            font = self.get_font('Arial', font_size, False, False)
+            wrapped = self.wrap_text(text, font, 1280 - (2 * margin))
             
-            wrapped = self.wrap_text(text, font, max_width)
-            line_heights = [font.getbbox(line)[3] for line in wrapped]
-            total_height = sum(line_heights)
+            total_height = sum(font.getbbox(line)[3] for line in wrapped)
+            y = max(margin, (720 - total_height) // 2)
             
-            y_position = max(
-                margin,
-                min((720 - total_height) // 2, 720 - total_height - margin)
-            )
-            
-            for line, line_height in zip(wrapped, line_heights):
-                line_width = font.getlength(line)
-                x_position = max(
-                    margin,
-                    min((1280 - line_width) // 2, 1280 - line_width - margin)
-                )
+            for line in wrapped:
+                bbox = font.getbbox(line)
+                x = max(margin, (1280 - bbox[2]) // 2)
                 
-                self.draw_text_line(draw, line, (x_position, y_position), font)
-                y_position += line_height
+                if self.settings.get('text_border', True):
+                    self.draw_text_border(draw, line, (x, y), font)
+                    
+                draw.text((x, y), line, font=font, 
+                         fill=self.settings.get('text_color', '#FFFFFF'))
+                y += bbox[3]
                 
-            path = os.path.join(self.temp_manager.image_dir, f"frame_{idx:06d}.png")
-            img.save(path)
-            return {'path': path, 'duration': entry['duration'] / speed_factor}
+            path = os.path.join(self.temp_manager.image_dir, f"frame_{idx:08d}.png")
+            self._save_image(img, path)
+            
+            return {
+                'path': path,
+                'duration': entry['duration'] / self.settings.get('speed_factor', 1.0)
+            }
         except Exception as e:
             logging.error(f"Simple image failed: {str(e)}")
             return None
 
-    def wrap_text(self, text: str, font: ImageFont.FreeTypeFont, max_width: int) -> List[str]:
-        lines = []
-        for paragraph in text.split('\n'):
-            current_line = []
-            current_length = 0
-            words = paragraph.split(' ')
-            
-            for word in words:
-                word_length = font.getlength(word)
-                if word_length > max_width:
-                    if current_line:
-                        lines.append(' '.join(current_line))
-                        current_line = []
-                    lines.append(word)
-                    continue
-                    
-                if current_length + font.getlength(word + ' ') > max_width:
-                    lines.append(' '.join(current_line))
-                    current_line = [word]
-                    current_length = font.getlength(word + ' ')
-                else:
-                    current_line.append(word)
-                    current_length += font.getlength(word + ' ')
-                    
-            if current_line:
-                lines.append(' '.join(current_line))
-        return lines
-
     def generate_styled_image(self, entry: Dict, idx: int) -> Optional[Dict]:
         try:
-            margin = self.settings.get('margin', 20)
-            font_size = self.settings.get('font_size', 24)
-            speed_factor = self.settings.get('speed_factor', 1.0)
-            custom_font = self.settings.get('custom_font')
-            
             img = self.create_base_image()
             draw = ImageDraw.Draw(img)
             styled = self.style_parser.parse(entry['text'])
-            y_position = margin
             
+            y = self.settings.get('margin', 20)
             for part in styled['parts']:
-                part_font_size = part['style'].get('size', font_size)
                 font = self.get_font(
                     part['style'].get('face', 'Arial'),
-                    part_font_size,
+                    part['style'].get('size', self.settings['font_size']),
                     part['style'].get('bold', False),
-                    part['style'].get('italic', False),
-                    custom_font
+                    part['style'].get('italic', False)
                 )
                 
-                wrapped = self.wrap_text(part['text'], font, 1280 - (margin * 2))
-                
-                for line in wrapped:
-                    line_width = font.getlength(line)
-                    x_position = max(
-                        margin,
-                        min((1280 - line_width) // 2, 1280 - line_width - margin)
-                    )
-                    
-                    line_height = font.getbbox(line)[3]
-                    if y_position + line_height > 720 - margin:
-                        break
-                    
-                    self.draw_text_line(draw, line, (x_position, y_position), font)
-                    y_position += line_height + 5
-                    
-            path = os.path.join(self.temp_manager.image_dir, f"styled_{idx:06d}.png")
-            img.save(path)
-            return {'path': path, 'duration': entry['duration'] / speed_factor}
+                x = self.settings.get('margin', 20)
+                if part['style'].get('align') == 'center':
+                    x = (1280 - font.getlength(part['text'])) // 2
+
+                self.draw_text_line(draw, part['text'], (x, y), font)
+                y += font.getbbox(part['text'])[3] + 5
+
+            path = os.path.join(self.temp_manager.image_dir, f"frame_{idx:08d}.png")
+            self._save_image(img, path)
+            
+            return {
+                'path': path,
+                'duration': entry['duration'] / self.settings.get('speed_factor', 1.0)
+            }
         except Exception as e:
             logging.error(f"Styled image failed: {str(e)}")
             return None
 
-    def get_font(self, face: str, size: int, bold: bool, italic: bool, custom_font: Optional[str]):
-        try:
-            if custom_font:
-                return ImageFont.truetype(custom_font, size)
-            else:
-                font_path = None
-                if bold and italic:
-                    font_path = "arialbi.ttf"
-                elif bold:
-                    font_path = "arialbd.ttf"
-                elif italic:
-                    font_path = "ariali.ttf"
-                else:
-                    font_path = "arial.ttf"
-                return ImageFont.truetype(font_path, size)
-        except IOError:
-            try:
-                return ImageFont.truetype(face, size)
-            except:
-                return ImageFont.load_default(size)
+    def _save_image(self, img: Image.Image, path: str):
+        """Validated image saving"""
+        if not path.startswith(self.temp_manager.image_dir):
+            raise ValueError("Attempted to save outside temp directory")
+        
+        # Ensure 8-digit zero-padded index
+        base_name = os.path.basename(path)
+        if not base_name.startswith("frame_") or not base_name.endswith(".png"):
+            raise ValueError("Invalid filename format")    
+        
+        img.save(path)
+        logging.debug(f"Saved image: {path}")
+        
+        if not os.path.exists(path):
+            raise IOError("Failed to write image file")
 
-    def draw_text_with_shadow(self, draw, text: str, position: tuple, font: ImageFont.FreeTypeFont, settings: Dict):
-        x, y = position
-        shadow_color = (0, 0, 0)
-        for i in range(3):
-            draw.text((x + 2, y + 2), text, font=font, fill=shadow_color)
-            draw.text((x - 2, y + 2), text, font=font, fill=shadow_color)
-            draw.text((x + 2, y - 2), text, font=font, fill=shadow_color)
-            draw.text((x - 2, y - 2), text, font=font, fill=shadow_color)    
+    def _validate_image(self, path: str) -> bool:
+        """Verify image meets requirements"""
+        try:
+            with Image.open(path) as test_img:
+                if test_img.mode != 'RGB' or test_img.size != (1280, 720):
+                    logging.error(f"Invalid image dimensions/mode: {path}")
+                    os.remove(path)
+                    return False
+            return True
+        except Exception as e:
+            logging.error(f"Image validation failed: {str(e)}")
+            return False
+
+    def apply_text_alignment(self, draw, text: str, font: ImageFont.FreeTypeFont, y_position: int):
+        """Handle center alignment and other positioning"""
+        bbox = font.getbbox(text)
+        text_width = bbox[2] - bbox[0]
+        
+        # Center alignment
+        x_position = (1280 - text_width) // 2
+        return x_position, y_position
+
+    def create_base_image(self) -> Image.Image:
+        """Create base image with proper settings validation"""
+        try:
+            if self.settings.get('background_image'):
+                img = Image.open(self.settings['background_image'])
+                img = img.convert('RGB').resize((1280, 720))
+                #logging.info(f"Using background image: {self.settings['background_image']}")
+                return img
+        except Exception as e:
+            logging.error(f"Background image error: {str(e)}")
+        
+        bg_color = self.settings.get('bg_color', '#000000')
+        #logging.info(f"Using background color: {bg_color}")
+        return Image.new('RGB', (1280, 720), bg_color)
+
+    def get_font(self, face: str, size: int, bold: bool, italic: bool) -> ImageFont.FreeTypeFont:
+        """Improved font loading with better error handling"""
+        try:
+            if self.settings.get('custom_font'):
+                return ImageFont.truetype(
+                    self.settings['custom_font'], 
+                    size,
+                    index=1 if italic else 0
+                )
+            
+            # System font fallback
+            font_path = self._find_system_font(face, bold, italic)
+            return ImageFont.truetype(font_path, size)
+        except Exception as e:
+            logging.error(f"Font error: {str(e)}")
+            return ImageFont.load_default(size)
+
+    def wrap_text(self, text: str, font: ImageFont.FreeTypeFont, max_width: int) -> List[str]:
+        lines = []
+        for paragraph in text.split('\n'):
+            words = paragraph.split(' ')
+            current_line = []
+            current_length = 0
+            
+            for word in words:
+                word_length = font.getlength(word + ' ')
+                if current_length + word_length > max_width:
+                    lines.append(' '.join(current_line))
+                    current_line = [word]
+                    current_length = word_length
+                else:
+                    current_line.append(word)
+                    current_length += word_length
+            lines.append(' '.join(current_line))
+        return lines
 
     def draw_text_border(self, draw, text: str, position: tuple, font: ImageFont.FreeTypeFont):
         x, y = position
-        border_color = (0, 0, 0)
-        offsets = [-2, -1, 0, 1, 2]
-        
-        for dx in offsets:
-            for dy in offsets:
+        for dx in [-2, -1, 0, 1, 2]:
+            for dy in [-2, -1, 0, 1, 2]:
                 if dx == 0 and dy == 0:
                     continue
-                draw.text((x+dx, y+dy), text, font=font, fill=border_color)
+                draw.text((x+dx, y+dy), text, font=font, fill=(0, 0, 0))
+
+    def draw_text_shadow(self, draw, text: str, position: tuple, font: ImageFont.FreeTypeFont):
+        x, y = position
+        for i in range(3):
+            draw.text((x+2+i, y+2+i), text, font=font, fill=(0, 0, 0, 128))
+
+    def _has_style_tags(self, text: str) -> bool:
+        return any(tag in text for tag in ['<b>', '<i>', '<font'])
 
     def draw_text_line(self, draw, text: str, position: tuple, font: ImageFont.FreeTypeFont):
-        text_color = self.settings.get('text_color', '#FFFFFF')
-        border = self.settings.get('text_border', False)
-        if border:
-            self.draw_text_border(draw, text, position, font)
-        draw.text(position, text, font=font, fill=text_color)
+        x, y = position
+        text_color = ImageColor.getrgb(self.settings.get('text_color', '#FFFFFF'))
+        
+        # Text Border
+        if self.settings.get('text_border', True):
+            border_color = (0, 0, 0)
+            for dx in [-2, -1, 0, 1, 2]:
+                for dy in [-2, -1, 0, 1, 2]:
+                    if dx == 0 and dy == 0: continue
+                    draw.text((x+dx, y+dy), text, font=font, fill=border_color)
 
-    def has_style_tags(self, text: str) -> bool:
-        return any(tag in text for tag in ['<b>', '<i>', '<font'])
+        # Text Shadow
+        if self.settings.get('text_shadow', False):
+            shadow_color = (0, 0, 0, 128)
+            for i in range(3):
+                draw.text((x+2+i, y+2+i), text, font=font, fill=shadow_color)
+
+        # Main Text
+        draw.text((x, y), text, font=font, fill=text_color)   
+
+    def _find_system_font(self, face: str, bold: bool, italic: bool) -> str:
+        """Robust system font discovery"""
+        font_map = {
+            ('Arial', False, False): 'arial.ttf',
+            ('Arial', True, False): 'arialbd.ttf',
+            ('Arial', False, True): 'ariali.ttf',
+            ('Arial', True, True): 'arialbi.ttf',
+            ('Helvetica', False, False): 'helvetica.ttf',
+            ('Times New Roman', False, False): 'times.ttf',
+        }
+        return font_map.get(
+            (face, bold, italic), 
+            'arial.ttf'  # Ultimate fallback
+        )     

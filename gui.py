@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, colorchooser
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageFont, ImageColor, ImageOps, ImageTk
 import logging
 import threading
 from processors.srt_parser import SRTParser
@@ -11,43 +11,65 @@ from utils.style_parser import StyleParser
 import concurrent.futures as futures
 from concurrent.futures import ThreadPoolExecutor
 import os
+import json 
 
 class VideoConverterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Video Caption Creator")
         self.root.geometry("1000x750")
-        
-        # Initialize settings FIRST
+        self.futures = []
+
+        # Initialize Tkinter variables
+        self.text_color_var = tk.StringVar(value="#FFFFFF")
+        self.bg_color_var = tk.StringVar(value="#000000")
+        self.font_size_var = tk.IntVar(value=24)
+        self.border_var = tk.BooleanVar(value=True)
+        self.shadow_var = tk.BooleanVar(value=False)
+        self.background_image_path = None
+        self.background_music_path = None
+        self.custom_font_path = None
+        self.srt_path = None
+
+        # Initialize settings dictionary
         self.settings = {
-            'text_color': "#FFFFFF",
-            'bg_color': "#000000",
-            'font_size': 24,
-            'text_border': True,
-            'text_shadow': False,
-            'speed_factor': 1.0,
+            'text_color': self.text_color_var.get(),
+            'bg_color': self.bg_color_var.get(),
+            'font_size': self.font_size_var.get(),
+            'text_border': self.border_var.get(),
+            'text_shadow': self.shadow_var.get(),
+            'background_image': self.background_image_path,
+            'background_music': self.background_music_path,
+            'custom_font': self.custom_font_path,
             'margin': 20,
-            'batch_size': 50,
-            'background_image': None,
-            'background_music': None,
-            'custom_font': None
+            'speed_factor': 1.0,
+            'batch_size': 50
         }
-        
-        # THEN initialize components
-        self.temp_manager = TempFileManager()
+
+        # Initialize components
+        self.temp_manager = TempFileManager(log_file="srt_converter.log")
         self.srt_parser = SRTParser()
         self.style_parser = StyleParser()
         self.image_generator = ImageGenerator(
-            temp_manager=self.temp_manager,
-            style_parser=self.style_parser,
-            settings=self.settings  # Explicitly pass settings
+            self.temp_manager,
+            self.style_parser,
+            self.settings
         )
-        self.video_processor = VideoProcessor(self.temp_manager, self.settings)
-        
+        self.video_processor = VideoProcessor(
+            self.temp_manager,
+            self.settings
+        )
+
+        # GUI state
+        self.running = False
+        self.preview_window = None
+
+        # Configure styles and widgets
         self.setup_styles()
         self.create_widgets()
         self.setup_logging()
-        self.running = False
+
+        self.root.after(100, self.update_color_labels)
 
     def setup_styles(self):
         self.style = ttk.Style()
@@ -55,169 +77,360 @@ class VideoConverterApp:
         self.style.configure('TButton', font=('Helvetica', 10), padding=6)
         self.style.configure('TLabel', font=('Helvetica', 9))
         self.style.configure('Header.TLabel', font=('Helvetica', 11, 'bold'))
+        self.style.configure('Progressbar', thickness=20)
 
     def create_widgets(self):
         main_frame = ttk.Frame(self.root, padding=20)
         main_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         # Settings Panel
         settings_frame = ttk.LabelFrame(main_frame, text="Settings", padding=10)
         settings_frame.pack(fill=tk.X, pady=10)
+
+        # Color Controls
+        ttk.Button(settings_frame, text="Text Color", 
+                 command=self.choose_text_color).grid(row=0, column=0, padx=5)
         
-        # Background controls
-        bg_frame = ttk.Frame(settings_frame)
-        bg_frame.pack(fill=tk.X, pady=5)
-        ttk.Button(bg_frame, text="Background Image", command=self.choose_background_image).pack(side=tk.LEFT)
-        ttk.Button(bg_frame, text="Background Color", command=self.choose_bg_color).pack(side=tk.LEFT, padx=5)
-        ttk.Button(bg_frame, text="Background Music", command=self.choose_background_music).pack(side=tk.LEFT)
+        self.text_color_label = tk.Label(
+            settings_frame, 
+            textvariable=self.text_color_var,
+            relief='sunken',
+            width=15,
+            font=('Helvetica', 9)
+        )
+        self.text_color_label.grid(row=0, column=1, padx=5)
+
+        ttk.Button(settings_frame, text="Background Color", 
+                 command=self.choose_bg_color).grid(row=1, column=0, padx=5)
         
-        # Font controls
-        font_frame = ttk.Frame(settings_frame)
-        font_frame.pack(fill=tk.X, pady=5)
-        ttk.Button(font_frame, text="Select Font", command=self.choose_font).pack(side=tk.LEFT)
-        ttk.Button(font_frame, text="Text Color", command=self.choose_text_color).pack(side=tk.LEFT, padx=5)
-        ttk.Label(font_frame, text="Text Size:").pack(side=tk.LEFT)
-        self.text_size = ttk.Scale(font_frame, from_=10, to=100, length=100)
-        self.text_size.set(self.settings['font_size'])
-        self.text_size.pack(side=tk.LEFT)
-        
-        # Effects checkboxes
-        check_frame = ttk.Frame(settings_frame)
-        check_frame.pack(fill=tk.X, pady=5)
-        self.border_var = tk.BooleanVar(value=self.settings['text_border'])
-        ttk.Checkbutton(check_frame, text="Text Border", variable=self.border_var,
-                      command=lambda: self.settings.update({'text_border': self.border_var.get()})).pack(side=tk.LEFT)
-        self.shadow_var = tk.BooleanVar(value=self.settings['text_shadow'])
-        ttk.Checkbutton(check_frame, text="Text Shadow", variable=self.shadow_var,
-                      command=lambda: self.settings.update({'text_shadow': self.shadow_var.get()})).pack(side=tk.LEFT)
-        
-        # Preview button
-        ttk.Button(settings_frame, text="Preview Style", command=self.show_preview).pack(pady=5)
-        
-        # Progress area
+        self.bg_color_label = tk.Label(
+            settings_frame, 
+            textvariable=self.bg_color_var,
+            relief='sunken',
+            width=15,
+            font=('Helvetica', 9)
+        )
+        self.bg_color_label.grid(row=1, column=1, padx=5)
+
+        # Font Controls
+        ttk.Label(settings_frame, text="Text Size:").grid(row=2, column=0)
+        self.font_size_slider = ttk.Scale(settings_frame, from_=10, to=100, 
+                                       variable=self.font_size_var)
+        self.font_size_slider.grid(row=2, column=1)
+        self.font_size_slider.set(24)
+
+        ttk.Button(settings_frame, text="Select Font", 
+                 command=self.choose_font).grid(row=3, column=0)
+
+        # Effects Checkboxes
+        ttk.Checkbutton(settings_frame, text="Text Border", 
+                      variable=self.border_var).grid(row=4, column=0)
+        ttk.Checkbutton(settings_frame, text="Text Shadow", 
+                      variable=self.shadow_var).grid(row=4, column=1)
+
+        # Media Controls
+        ttk.Button(settings_frame, text="Background Image", 
+                 command=self.choose_background_image).grid(row=5, column=0)
+        ttk.Button(settings_frame, text="Background Music", 
+                 command=self.choose_background_music).grid(row=5, column=1)
+
+        # Preview Button
+        ttk.Button(settings_frame, text="Preview Style", 
+                 command=self.show_preview).grid(row=6, columnspan=2, pady=5)
+
+        # Progress Area
         progress_frame = ttk.Frame(main_frame)
         progress_frame.pack(fill=tk.X, pady=20)
         self.progress = ttk.Progressbar(progress_frame, mode='determinate')
         self.progress.pack(fill=tk.X)
         self.progress_label = ttk.Label(progress_frame, text="Ready")
         self.progress_label.pack()
-        
-        # Action buttons
+
+        # Action Buttons
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(pady=10)
-        ttk.Button(btn_frame, text="Generate Video", command=self.start_generation).pack(side=tk.LEFT)
-        ttk.Button(btn_frame, text="Cancel", command=self.cancel_generation).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Generate Video", 
+                 command=self.start_generation).pack(side=tk.LEFT)
+        ttk.Button(btn_frame, text="Cancel", 
+                 command=self.cancel_generation).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(settings_frame, text="Select SRT File", 
+                 command=self.choose_srt_file).grid(row=7, column=0, pady=5)
+        self.srt_label = ttk.Label(settings_frame, text="No SRT file selected")
+        self.srt_label.grid(row=7, column=1, padx=5)
 
-    def choose_background_image(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.jpg *.png *.jpeg")])
-        if file_path:
-            self.settings['background_image'] = file_path
+        self.update_color_labels()
 
-    def choose_bg_color(self):
-        color = colorchooser.askcolor(title="Choose Background Color")
-        if color[1]:
-            self.settings['bg_color'] = color[1]
+    def update_settings(self):
+        """Ensure settings are properly separated"""
+        self.settings.update({
+            'text_color': self.text_color_var.get(),
+            'bg_color': self.bg_color_var.get(),  # Separate from text color
+            'font_size': int(self.font_size_var.get()),
+            'text_border': self.border_var.get(),
+            'text_shadow': self.shadow_var.get(),
+            'background_image': self.background_image_path,
+            'background_music': self.background_music_path,
+            'custom_font': self.custom_font_path
+        })
+
+        #logging.debug(f"Text Color: {self.settings['text_color']}")
+        #logging.debug(f"BG Color: {self.settings['bg_color']}")
+
+        # Convert settings to JSON-safe format
+        loggable_settings = self.settings.copy()
+        loggable_settings['custom_font'] = str(loggable_settings['custom_font'])
+        loggable_settings['background_image'] = str(loggable_settings['background_image'])
+        
+        logging.debug(f"Current Settings:\n{json.dumps(loggable_settings, indent=2)}")
+        self.image_generator.settings = self.settings.copy()
+        self.video_processor.settings = self.settings.copy()
+
+    @staticmethod    
+    def is_dark_color(hex_color):
+        """Determine if a color is dark using luminance calculation"""
+        hex_color = hex_color.lstrip('#')
+        if len(hex_color) != 6:
+            return False  # Default to light color if invalid
+        r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        return luminance < 0.5
+
+    def update_color_labels(self):
+        """Update both color labels' appearance"""
+        # Text color label
+        text_color = self.text_color_var.get()
+        self.text_color_label.config(
+            bg=text_color,
+            fg='white' if self.is_dark_color(text_color) else 'black'  # Changed here
+        )
+        
+        # Background color label
+        bg_color = self.bg_color_var.get()
+        self.bg_color_label.config(
+            bg=bg_color,
+            fg='white' if self.is_dark_color(bg_color) else 'black'  # Changed here
+        )
 
     def choose_text_color(self):
         color = colorchooser.askcolor(title="Choose Text Color")
         if color[1]:
-            self.settings['text_color'] = color[1]
+            self.text_color_var.set(color[1])
+            self.update_color_labels()
+            logging.debug(f"Text color updated to: {color[1]}")
+
+    def choose_bg_color(self):
+        color = colorchooser.askcolor(title="Choose Background Color")
+        if color[1]:
+            self.bg_color_var.set(color[1])
+            self.update_color_labels()
+            logging.debug(f"Background color updated to: {color[1]}")
 
     def choose_font(self):
         file_path = filedialog.askopenfilename(filetypes=[("Font Files", "*.ttf *.otf")])
         if file_path:
-            self.settings['custom_font'] = file_path
+            try:
+                ImageFont.truetype(file_path, 10)  # Quick validation
+                self.custom_font_path = file_path
+            except IOError:
+                messagebox.showerror("Invalid Font", "The selected file is not a valid font.")
+
+    def choose_background_image(self):
+        file_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.jpg *.png *.jpeg")])
+        if file_path:
+            self.background_image_path = file_path
+            logging.info(f"Selected background image: {file_path}")
 
     def choose_background_music(self):
         file_path = filedialog.askopenfilename(filetypes=[("Audio Files", "*.mp3 *.wav")])
         if file_path:
-            self.settings['background_music'] = file_path
+            self.background_music_path = file_path
+            logging.info(f"Selected background music: {file_path}")
+
+    def choose_srt_file(self):
+        """Handle SRT file selection"""
+        file_path = filedialog.askopenfilename(
+            filetypes=[("SRT files", "*.srt"), ("All files", "*.*")]
+        )
+        if file_path:
+            self.srt_path = file_path
+            self.srt_label.config(text=os.path.basename(file_path))
+            logging.info(f"Selected SRT file: {file_path}")
 
     def show_preview(self):
-        preview_window = tk.Toplevel(self.root)
-        preview_window.title("Text Style Preview")
-        img = self.image_generator.generate_preview(
-            "Preview Text\n<font size='18'>Styled Text</font>\n<i>Italic Text</i>",
-            self.settings
-        )
+        """Show style preview with thread safety and loading indicator"""
+        self.update_settings()
+        
+        # Close existing preview
+        if self.preview_window:
+            self.preview_window.destroy()
+        
+        # Create preview window
+        self.preview_window = tk.Toplevel(self.root)
+        self.preview_window.title("Text Style Preview")
+        self.preview_window.protocol("WM_DELETE_WINDOW", self.close_preview)
+        
+        # Add loading container
+        loading_frame = ttk.Frame(self.preview_window)
+        loading_frame.pack(pady=20)
+        
+        ttk.Label(loading_frame, 
+                 text="Generating preview...", 
+                 font=('Helvetica', 10)).pack(pady=5)
+        self.loading_spinner = ttk.Progressbar(loading_frame, 
+                                              mode='indeterminate',
+                                              length=200)
+        self.loading_spinner.pack(pady=10)
+        self.loading_spinner.start()
+        
+        # Start preview generation in thread
+        threading.Thread(
+            target=self._generate_preview_content,
+            args=("Preview Text\n<font size='18'>Styled Text</font>\n<i>Italic</i>",),
+            daemon=True
+        ).start()
+
+    def _generate_preview_content(self, preview_text):
+        """Background thread work for preview generation"""
+        try:
+            # Generate the image in background thread
+            img = self.image_generator.generate_preview(preview_text)
+            
+            # Schedule GUI update in main thread
+            self.root.after(0, self._update_preview_display, img)
+        except Exception as e:
+            error_msg = f"Preview error: {str(e)}"
+            logging.error(error_msg)
+            self.root.after(0, self._show_preview_error, error_msg)
+
+    def _update_preview_display(self, img):
+        """Update preview window with generated image"""
+        if not self.preview_window.winfo_exists():
+            return  # Window closed before we finished
+            
+        # Clear loading elements
+        for widget in self.preview_window.winfo_children():
+            widget.destroy()
+        
+        # Display generated image
         photo = ImageTk.PhotoImage(img)
-        label = ttk.Label(preview_window, image=photo)
-        label.image = photo
+        label = ttk.Label(self.preview_window, image=photo)
+        label.image = photo  # Keep reference
         label.pack(padx=10, pady=10)
-        ttk.Button(preview_window, text="Close", command=preview_window.destroy).pack(pady=5)
+        
+        # Add close button
+        ttk.Button(self.preview_window, 
+                  text="Close Preview", 
+                  command=self.close_preview).pack(pady=5)
+
+    def _show_preview_error(self, message):
+        """Show error message in preview window"""
+        if not self.preview_window.winfo_exists():
+            return
+        
+        for widget in self.preview_window.winfo_children():
+            widget.destroy()
+        
+        ttk.Label(self.preview_window, 
+                 text="Preview Generation Failed", 
+                 style='Header.TLabel').pack(pady=5)
+        ttk.Label(self.preview_window, 
+                 text=message, 
+                 foreground='red').pack(pady=5)
+        ttk.Button(self.preview_window, 
+                  text="Close", 
+                  command=self.close_preview).pack(pady=5)
+
+    def close_preview(self):
+        """Safely close preview window"""
+        if self.preview_window:
+            self.preview_window.destroy()
+        self.preview_window = None
+
 
     def start_generation(self):
         if not self.running:
+            if not self.srt_path:
+                messagebox.showerror("Error", "Please select an SRT file first")
+                return
+                
             self.running = True
+            self.update_settings()
             threading.Thread(target=self.generate_video, daemon=True).start()
 
     def generate_video(self):
         try:
-            srt_file = filedialog.askopenfilename(filetypes=[("SRT files", "*.srt")])
-            if not srt_file:
+            output_path = filedialog.asksaveasfilename(
+                defaultextension=".mp4",
+                filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")]
+            )
+            
+            if not output_path:
+                self.running = False
                 return
-
+            
             self.update_status("Parsing SRT...", 0)
-            entries = self.srt_parser.parse(srt_file)
+            entries = self.srt_parser.parse(self.srt_path)
+            
             if not entries:
                 messagebox.showerror("Error", "Invalid SRT file")
+                self.running = False
                 return
 
             self.update_status("Generating images...", 25)
             images = self.image_generator.generate_images(entries)
+            
             if len(images) != len(entries):
                 messagebox.showerror("Error", f"Failed to generate {len(entries)-len(images)} images")
                 return
 
-            self.update_status("Processing batches...", 50)
-            batches = [
-                images[i:i+self.settings['batch_size']]  # Use settings value
-                for i in range(0, len(images), self.settings['batch_size'])
-            ]
-            
-            with ThreadPoolExecutor() as executor:
-                # Use non-conflicting variable name
-                future_tasks = [
-                    executor.submit(self.video_processor.process_batch, batch, idx)
-                    for idx, batch in enumerate(batches)
-                ]
-                
-                # Collect valid segments
-                segments = []
-                for future in future_tasks:
-                    result = future.result()
-                    if result and os.path.exists(result):
-                        segments.append(result)
-
-            if not segments:
-                messagebox.showerror("Error", "No valid video segments created")
-                return
-
-            output_path = filedialog.asksaveasfilename(defaultextension=".mp4")
+            self.update_status("Processing video...", 50)
             if output_path:
+                batches = [images[i:i+self.settings['batch_size']] 
+                          for i in range(0, len(images), self.settings['batch_size'])]
+                
+                with ThreadPoolExecutor() as executor:
+                    self.futures = [executor.submit(self.video_processor.process_batch, batch, idx)
+                             for idx, batch in enumerate(batches)]
+                    
+                    segments = []
+                    for future in futures.as_completed(self.futures):
+                        if not self.running:
+                            break
+                        result = future.result()
+                        if result:
+                            segments.append(result)
+                
+                if not segments:
+                    messagebox.showerror("Error", "No valid video segments created")
+                    return
+                
                 self.update_status("Combining segments...", 75)
-                success = self.video_processor.combine_segments(segments, output_path, self.settings['background_music'])
-                if success:
-                #if self.video_processor.combine_segments(segments, output_path):
+                if self.video_processor.combine_segments(segments, output_path, self.settings['background_music']):
                     self.update_status("Complete!", 100)
                     messagebox.showinfo("Success", f"Video saved to:\n{output_path}")
                 else:
                     messagebox.showerror("Error", "Failed to combine segments")
+                
         except Exception as e:
             logging.error(f"Generation failed: {str(e)}")
             messagebox.showerror("Error", str(e))
         finally:
+            self.futures = []
             self.running = False
             self.temp_manager.cleanup()
 
     def update_status(self, message: str, progress: int):
-        self.progress_label.config(text=message)
-        self.progress['value'] = progress
+        self.root.after(0, self.progress_label.config, {'text': message})
+        self.root.after(0, self.progress.configure, {'value': progress})
         self.root.update_idletasks()
 
     def cancel_generation(self):
         if self.running:
             self.running = False
+            # Cancel pending futures
+            for future in self.futures:
+                future.cancel()
             self.temp_manager.cleanup()
             self.update_status("Cancelled", 0)
             messagebox.showinfo("Info", "Generation cancelled")
@@ -228,14 +441,3 @@ class VideoConverterApp:
             format='%(asctime)s - %(levelname)s - %(message)s',
             filename='srt_converter.log'
         )
-
-    def create_settings_panel(self, parent):
-        # Add batch size control
-        ttk.Label(parent, text="Batch Size:").grid(row=5, column=0, sticky='w')
-        self.batch_size = ttk.Combobox(parent, values=[10, 25, 50, 100], width=8)
-        self.batch_size.set(self.settings['batch_size'])
-        self.batch_size.grid(row=5, column=1, sticky='w')
-        
-        # Update settings on change
-        self.batch_size.bind("<<ComboboxSelected>>", 
-                            lambda e: self.settings.update({'batch_size': int(self.batch_size.get())}))    
