@@ -8,64 +8,29 @@ from processors.image_generator import ImageGenerator
 from processors.video_processor import VideoProcessor
 from utils.helpers import TempFileManager
 from utils.style_parser import StyleParser
+import concurrent.futures
 import concurrent.futures as futures
 from concurrent.futures import ThreadPoolExecutor
 import os
 import json 
+import subprocess
+from typing import List, Dict, Optional, Tuple 
 
 class VideoConverterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Video Caption Creator")
         self.root.geometry("1000x750")
-        self.initialize_app()
+        self.preview_window = None
         
-    def initialize_app(self):
-        """Initialize/Restart application state"""
-        # Clear existing widgets if any
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        
-        # Reset all variables
-        self.text_color_var = tk.StringVar(value="#FFFFFF")
-        self.bg_color_var = tk.StringVar(value="#000000")
-        self.font_size_var = tk.IntVar(value=24)
-        self.border_var = tk.BooleanVar(value=True)
-        self.shadow_var = tk.BooleanVar(value=False)
-        self.background_image_path = None
-        self.background_music_path = None
-        self.custom_font_path = None
-        self.srt_path = None
-        self.user_value_var = tk.StringVar()
-        self.user_value_var = tk.StringVar(value="-400")
-
-        # Reset processing state
-        self.running = False
-        self.futures = []
-        
-        # Reinitialize components
-        self.temp_manager = TempFileManager(log_file="srt_converter.log")
-        self.srt_parser = SRTParser()
-        self.style_parser = StyleParser()
-        self.image_generator = ImageGenerator(
-            self.temp_manager,
-            self.style_parser,
-            self.get_current_settings()
-        )
-        self.video_processor = VideoProcessor(
-            self.temp_manager,
-            self.get_current_settings()
-        )
-
-        # Rebuild UI
-        self.setup_styles()
-        self.create_widgets()
-        self.setup_logging()
-        
-        self.root.after(100, self.update_color_labels)
-
-    def get_current_settings(self):
-        """Return current settings dictionary"""
+        # Initialize app components in correct order
+        self.initialize_app()  # 1. Variables and core components
+        self.setup_styles()    # 2. UI styling
+        self.create_widgets()  # 3. Create GUI elements
+        self.setup_logging()   # 4. Configure logging
+    
+    def get_current_settings(self) -> dict:
+        """Safely get current settings with null checks"""
         return {
             'text_color': self.text_color_var.get(),
             'bg_color': self.bg_color_var.get(),
@@ -77,8 +42,72 @@ class VideoConverterApp:
             'custom_font': self.custom_font_path,
             'margin': 20,
             'speed_factor': 1.0,
-            'batch_size': 50
+            'batch_size': 50,
+            'user_value': self._safe_int_get(self.user_value_var, -400)
         }
+
+    def _safe_int_get(self, var: tk.StringVar, default: int) -> int:
+        """Safely get integer value from StringVar"""
+        try:
+            return int(var.get())
+        except (ValueError, AttributeError):
+            return default   
+
+    def initialize_app(self):
+        """Initialize all application state and components in correct order"""
+        # 1. Initialize Tkinter variables first
+        self.text_color_var = tk.StringVar(value="#FFFFFF")
+        self.bg_color_var = tk.StringVar(value="#000000")
+        self.font_size_var = tk.IntVar(value=24)
+        self.border_var = tk.BooleanVar(value=True)
+        self.shadow_var = tk.BooleanVar(value=False)
+        self.user_value_var = tk.StringVar(value="-400")
+        self.expected_dimensions = (1280, 720)
+
+        self.settings = {
+            'batch_size': 50,  # Default value
+            'expected_dimensions': self.expected_dimensions
+        }
+
+        # 2. Initialize file paths
+        self.background_image_path = None
+        self.background_music_path = None
+        self.custom_font_path = None
+        self.srt_path = None
+
+        # 3. Initialize core components with default settings
+        self.temp_manager = TempFileManager()
+        self.style_parser = StyleParser()
+        self.srt_parser = SRTParser()
+        
+        # 4. Get initial settings from variables
+        initial_settings = self.get_current_settings()
+        
+        # 5. Create processing components with initial settings
+        self.image_generator = ImageGenerator(
+            self.temp_manager,
+            self.style_parser,
+            self.get_current_settings()
+        )
+
+        self.video_processor = VideoProcessor(
+            self.temp_manager,
+            self.get_current_settings()
+        )
+
+        # 6. Initialize other state
+        self.running = False
+        self.futures = []
+
+        self.update_settings()
+
+    def _safe_var_get(self, var, default):
+        """Safely get variable value with fallback"""
+        try:
+            return var.get()
+        except AttributeError:
+            logging.warning(f"Missing variable, using default: {default}")
+            return default
 
     def reset_application(self):
         """Full application reset handler"""
@@ -100,117 +129,125 @@ class VideoConverterApp:
     def setup_styles(self):
         self.style = ttk.Style()
         self.style.theme_use('clam')
-        self.style.configure('TButton', font=('Helvetica', 10), padding=6)
-        self.style.configure('TLabel', font=('Helvetica', 9))
-        self.style.configure('Header.TLabel', font=('Helvetica', 11, 'bold'))
+        self.style.configure('TButton', font=('Helvetica', 10), padding=5)
+        self.style.configure('TLabel', font=('Helvetica', 10))
+        self.style.configure('Header.TLabel', font=('Helvetica', 10, 'bold'))
         self.style.configure('Progressbar', thickness=20)
 
     def create_widgets(self):
-        main_frame = ttk.Frame(self.root, padding=20)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        try:
+            main_frame = ttk.Frame(self.root, padding=20)
+            main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Settings Panel
-        settings_frame = ttk.LabelFrame(main_frame, text="Settings", padding=10)
-        settings_frame.pack(fill=tk.X, pady=10)
+            # Settings Panel
+            settings_frame = ttk.LabelFrame(main_frame, text="Settings", padding=10)
+            settings_frame.pack(fill=tk.X, pady=10)
 
-        # Add input section
-        input_frame = ttk.Frame(main_frame)
-        input_frame.pack(fill=tk.X, pady=10)
-        
-        # Integer input box for Edit SRT file delay
-        ttk.Label(input_frame, text="Edit SRT file delay:").pack(side=tk.LEFT)
-        self.num_input = ttk.Entry(
-            input_frame,
-            textvariable=self.user_value_var,
-            validate='key',
-            validatecommand=(self.root.register(self.validate_int), '%P')
-        )
-        self.num_input.pack(side=tk.LEFT, padx=5)
+            # Add input section
+            input_frame = ttk.Frame(main_frame)
+            input_frame.pack(fill=tk.X, pady=10)
+            
+            # Integer input box for Edit SRT file delay
+            ttk.Label(input_frame, text="Edit SRT file add a delay in Millisecond:").pack(side=tk.LEFT)
+            self.num_input = ttk.Entry(
+                input_frame,
+                textvariable=self.user_value_var,
+                validate='key',
+                validatecommand=(self.root.register(self.validate_int), '%P')
+            )
+            self.num_input.pack(side=tk.LEFT, padx=5)
 
-        # Color Controls
-        ttk.Button(settings_frame, text="Text Color", 
-                 command=self.choose_text_color).grid(row=0, column=0, padx=5)
-        
-        self.text_color_label = tk.Label(
-            settings_frame, 
-            textvariable=self.text_color_var,
-            relief='sunken',
-            width=15,
-            font=('Helvetica', 9)
-        )
-        self.text_color_label.grid(row=0, column=1, padx=5)
+            # Color Controls
+            ttk.Button(settings_frame, text="Text Color", 
+                     command=self.choose_text_color).grid(row=0, column=0, pady=5)
+            
+            self.text_color_label = tk.Label(
+                settings_frame, 
+                textvariable=self.text_color_var,
+                relief='sunken',
+                width=15,
+                font=('Helvetica', 8)
+            )
+            self.text_color_label.grid(row=0, column=1, padx=5)
 
-        ttk.Button(settings_frame, text="Background Color", 
-                 command=self.choose_bg_color).grid(row=1, column=0, padx=5)
-        
-        self.bg_color_label = tk.Label(
-            settings_frame, 
-            textvariable=self.bg_color_var,
-            relief='sunken',
-            width=15,
-            font=('Helvetica', 9)
-        )
-        self.bg_color_label.grid(row=1, column=1, padx=5)
+            ttk.Button(settings_frame, text="Background Color", 
+                     command=self.choose_bg_color).grid(row=2, column=0, padx=5)
+            
+            self.bg_color_label = tk.Label(
+                settings_frame, 
+                textvariable=self.bg_color_var,
+                relief='sunken',
+                width=15,
+                font=('Helvetica', 8)
+            )
+            self.bg_color_label.grid(row=2, column=1, padx=5)
 
-        # Font Controls
-        ttk.Label(settings_frame, text="Text Size:").grid(row=2, column=0)
-        self.font_size_slider = ttk.Scale(settings_frame, from_=10, to=100, 
-                                       variable=self.font_size_var)
-        self.font_size_slider.grid(row=2, column=1)
-        self.font_size_slider.set(24)
+            # Font Controls
+            ttk.Label(settings_frame, text="Text Size:").grid(row=0, column=5)
+            self.font_size_slider = ttk.Scale(settings_frame, from_=10, to=100, 
+                                           variable=self.font_size_var)
+            self.font_size_slider.grid(row=2, column=5)
+            self.font_size_slider.set(24)
 
-        ttk.Button(settings_frame, text="Select Font", 
-                 command=self.choose_font).grid(row=3, column=0)
+            ttk.Button(settings_frame, text="Select Font", 
+                     command=self.choose_font).grid(row=4, column=0, pady=5)
 
-        # Effects Checkboxes
-        ttk.Checkbutton(settings_frame, text="Text Border", 
-                      variable=self.border_var).grid(row=4, column=0)
-        ttk.Checkbutton(settings_frame, text="Text Shadow", 
-                      variable=self.shadow_var).grid(row=4, column=1)
+            # Effects Checkboxes
+            ttk.Checkbutton(settings_frame, text="Text Border", 
+                          variable=self.border_var).grid(row=8, column=5, padx=5)
+            ttk.Checkbutton(settings_frame, text="Text Shadow", 
+                          variable=self.shadow_var).grid(row=9, column=5, padx=5)
 
-        # Media Controls
-        ttk.Button(settings_frame, text="Background Image", 
-                 command=self.choose_background_image).grid(row=5, column=0)
-        ttk.Button(settings_frame, text="Background Music", 
-                 command=self.choose_background_music).grid(row=5, column=1)
+            # Media Controls
+            ttk.Button(settings_frame, text="Background Image", 
+                     command=self.choose_background_image).grid(row=6, column=5, padx=5)
+            
+            ttk.Button(settings_frame, text="Background Music", 
+                     command=self.choose_background_music).grid(row=9, column=0, padx=5)
 
-        # Preview Button
-        ttk.Button(settings_frame, text="Preview Style", 
-                 command=self.show_preview).grid(row=6, columnspan=2, pady=5)
+            # Preview Button
+            ttk.Button(settings_frame, text="Preview Style", 
+                     command=self.show_preview).grid(row=4, column=5, columnspan=2, padx=5)
 
-        # Progress Area
-        progress_frame = ttk.Frame(main_frame)
-        progress_frame.pack(fill=tk.X, pady=20)
-        self.progress = ttk.Progressbar(progress_frame, mode='determinate')
-        self.progress.pack(fill=tk.X)
-        self.progress_label = ttk.Label(progress_frame, text="Ready")
-        self.progress_label.pack()
+            # Progress Area
+            progress_frame = ttk.Frame(main_frame)
+            progress_frame.pack(fill=tk.X, pady=20)
+            self.progress = ttk.Progressbar(progress_frame, mode='determinate')
+            self.progress.pack(fill=tk.X)
+            self.progress_label = ttk.Label(progress_frame, text="Ready")
+            self.progress_label.pack()
 
-        # Action Buttons
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(pady=10)
-        ttk.Button(btn_frame, text="Generate Video", 
-                 command=self.start_generation).pack(side=tk.LEFT)
-        ttk.Button(btn_frame, text="Cancel", 
-                 command=self.cancel_generation).pack(side=tk.LEFT, padx=5)
-        
-        #Reset buton
-        reset_frame = ttk.Frame(self.root)
-        reset_frame.pack(pady=10, fill=tk.X)
-        ttk.Button(
-            reset_frame,
-            text="Reset Application",
-            command=self.reset_application,
-            style='Danger.TButton'
-        ).pack(side=tk.LEFT, padx=5)
+            # Action Buttons
+            btn_frame = ttk.Frame(main_frame)
+            btn_frame.pack(pady=10)
+            ttk.Button(btn_frame, text="Generate Video", 
+                     command=self.start_generation).pack(side=tk.LEFT)
+            ttk.Button(btn_frame, text="Cancel", 
+                     command=self.cancel_generation).pack(side=tk.LEFT, padx=5)
+            
+            #Reset buton
+            reset_frame = ttk.Frame(self.root)
+            reset_frame.pack(pady=10, fill=tk.X)
+            ttk.Button(
+                reset_frame,
+                text="Reset Application",
+                command=self.reset_application,
+                style='Danger.TButton'
+            ).pack(side=tk.LEFT, padx=5)
 
-        #Add SRT file
-        ttk.Button(settings_frame, text="Select SRT File", 
-                 command=self.choose_srt_file).grid(row=7, column=0, pady=5)
-        self.srt_label = ttk.Label(settings_frame, text="No SRT file selected")
-        self.srt_label.grid(row=7, column=1, padx=5)
+            
+            #Add SRT file
+            ttk.Button(settings_frame, text="Select SRT File", 
+                     command=self.choose_srt_file).grid(row=7, column=0, pady=5)
+            self.srt_label = ttk.Label(settings_frame, text="No SRT file selected")
+            self.srt_label.grid(row=7, column=1, padx=5)
 
-        self.update_color_labels()
+            self.update_color_labels()
+
+        except AttributeError as ae:
+            logging.critical(f"Widget creation failed: {str(ae)}")
+            messagebox.showerror("Fatal Error", "Application failed to initialize")
+            self.root.destroy()
 
     @staticmethod
     def validate_int(new_value):
@@ -224,29 +261,23 @@ class VideoConverterApp:
             return False
 
     def update_settings(self):
-        """Ensure settings are properly separated"""
+        """Update settings from UI components"""
+        self.settings['batch_size'] = int(self.settings.get('batch_size', 50))
         self.settings.update({
             'text_color': self.text_color_var.get(),
-            'bg_color': self.bg_color_var.get(),  # Separate from text color
-            'font_size': int(self.font_size_var.get()),
+            'bg_color': self.bg_color_var.get(),
+            'font_size': self.font_size_var.get(),
             'text_border': self.border_var.get(),
             'text_shadow': self.shadow_var.get(),
             'background_image': self.background_image_path,
             'background_music': self.background_music_path,
-            'custom_font': self.custom_font_path
+            'custom_font': self.custom_font_path,
+            'speed_factor': 1.0,
+            'margin': 20,
+            'user_value': int(self.user_value_var.get()) 
+                          if self.user_value_var.get().lstrip('-').isdigit() 
+                          else -400
         })
-
-        #logging.debug(f"Text Color: {self.settings['text_color']}")
-        #logging.debug(f"BG Color: {self.settings['bg_color']}")
-
-        # Convert settings to JSON-safe format
-        loggable_settings = self.settings.copy()
-        loggable_settings['custom_font'] = str(loggable_settings['custom_font'])
-        loggable_settings['background_image'] = str(loggable_settings['background_image'])
-        
-        logging.debug(f"Current Settings:\n{json.dumps(loggable_settings, indent=2)}")
-        self.image_generator.settings = self.settings.copy()
-        self.video_processor.settings = self.settings.copy()
 
     @staticmethod    
     def is_dark_color(hex_color):
@@ -409,7 +440,6 @@ class VideoConverterApp:
             self.preview_window.destroy()
         self.preview_window = None
 
-
     def start_generation(self):
         #should change exec external script here
         if not self.running:
@@ -417,132 +447,268 @@ class VideoConverterApp:
                 messagebox.showerror("Error", "Please select an SRT file first")
                 return
                 
-            self.running = True
-            self.update_settings()
-            threading.Thread(target=self.generate_video, daemon=True).start()
-
-    def generate_video(self):
-        try:
-            output_path = filedialog.asksaveasfilename(
-                defaultextension=".mp4",
-                filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")]
-            )
-            
-            if not output_path:
-                self.running = False
-                return
-            #add logic of changing srt file name
             try:
-                # Get and validate input value
-                user_input = self.user_value_var.get()
-                num_iterations = int(user_input) if user_input else -400  # Default value
-                
+                delay = int(self.user_value_var.get())
                 self.running = True
                 threading.Thread(
                     target=self.run_external_script,
-                    args=(num_iterations,),
+                    args=(delay,),
                     daemon=True
                 ).start()
             except ValueError:
                 messagebox.showerror("Invalid Input", "Please enter a valid integer")
                 self.running = False
 
-            self.update_status("Parsing SRT...", 0)
-            entries = self.srt_parser.parse(self.srt_path)
-            
-            if not entries:
-                messagebox.showerror("Error", "Invalid SRT file")
-                self.running = False
-                return
+    def verify_temp_files(image_dicts: List[Dict]):
+        """Emergency file system verification"""
+        existing = 0
+        missing = 0
+        invalid = 0
+        
+        for img in image_dicts[:100]:  # Check first 100 files
+            path = img.get('path', '')
+            if not os.path.exists(path):
+                missing += 1
+                continue
+            try:
+                with Image.open(path) as im:
+                    im.verify()
+                existing +=1
+            except:
+                invalid +=1
+                
+        logging.critical(
+            f"File System Check:\n"
+            f"Existing: {existing}\n"
+            f"Missing: {missing}\n"
+            f"Corrupted: {invalid}"
+        )
 
-            self.update_status("Generating images...", 25)
+    def generate_video(self, output_path: str) -> None:
+        """Process subtitle entries into a video with audio"""
+        try:
+            self.update_settings()
+            self.update_status("Initializing video generation...", 0)
+
+            if not self.temp_manager.verify_file("temp.srt"):
+                raise FileNotFoundError("Adjusted SRT file not found or empty")
+
+            adjusted_srt = os.path.join(self.temp_manager.root_dir, "temp.srt")
+
+            # 2. Parse subtitle entries with time validation
+            self.update_status("Parsing subtitles...", 5)
+            entries = self.srt_parser.parse("video_gen_temp/temp.srt")
+            if not entries:
+                raise ValueError("No valid subtitle entries found in adjusted SRT file")
+
+            # 3. Generate subtitle images with quality checks
+            self.update_status("Generating subtitle images...", 20)
             images = self.image_generator.generate_images(entries)
             
             if len(images) != len(entries):
-                messagebox.showerror("Error", f"Failed to generate {len(entries)-len(images)} images")
-                return
+                raise RuntimeError(
+                    f"Image generation mismatch: {len(entries)} entries vs {len(images)} images"
+                )
 
-            self.update_status("Processing video...", 50)
-            if output_path:
-                batches = [images[i:i+self.settings['batch_size']] 
-                          for i in range(0, len(images), self.settings['batch_size'])]
-                
-                with ThreadPoolExecutor() as executor:
-                    self.futures = [executor.submit(self.video_processor.process_batch, batch, idx)
-                             for idx, batch in enumerate(batches)]
-                    
-                    segments = []
-                    for future in futures.as_completed(self.futures):
-                        if not self.running:
-                            break
-                        result = future.result()
-                        if result:
-                            segments.append(result)
-                
-                if not segments:
-                    messagebox.showerror("Error", "No valid video segments created")
-                    return
-                
-                self.update_status("Combining segments...", 75)
-                if self.video_processor.combine_segments(segments, output_path, self.settings['background_music']):
-                    self.update_status("Complete!", 100)
-                    #maybe add logic to delete temp srt file that was edited
-                    messagebox.showinfo("Success", f"Video saved to:\n{output_path}")
-                else:
-                    messagebox.showerror("Error", "Failed to combine segments")
+            # 4. Validate sample images
+            sample_check = self.validate_images([img['path'] for img in images[:3]])
+            if not sample_check["success"]:
+                raise RuntimeError(f"Image validation failed: {sample_check['errors'][0]}")
+
+            # 5. Process in batches with progress tracking
+            self.update_status("Processing video batches...", 30)
+            batch_size = self.settings.get('batch_size', 50)
+            image_paths = [img['path'] for img in images]
+            batches = [images[i:i+batch_size] for i in range(0, len(images), batch_size)]
+            
+            segments = []
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                future_to_batch = {
+                    executor.submit(
+                        self.video_processor.process_batch,  # Method reference
+                        batch,            # 1st argument (List[Dict])
+                        idx              # 2nd argument (int)
+                    ): idx for idx, batch in enumerate(batches)
+                }
+
+                self.futures = list(future_to_batch.keys())
+
+                for future in futures.as_completed(future_to_batch):
+                    try:
+                        segment_path = future.result()
+                        if segment_path and os.path.exists(segment_path):
+                            segments.append(segment_path)
+                            progress = 30 + 60 * len(segments)//len(batches)
+                            self.update_status(f"Processed {len(segments)}/{len(batches)} batches", progress)
+                    except Exception as e:
+                        logging.error(f"Batch processing failed: {str(e)}")
+                        self._save_batch_debug_info(batches[future_to_batch[future]], future_to_batch[future])
+
+            # 6. Combine video segments
+            if not segments:
+                raise RuntimeError("No valid video segments created")
+
+            self.update_status("Finalizing video...", 90)
+            final_video = self.video_processor.combine_segments(
+                segments,
+                output_path,
+                self.settings.get('background_music')
+            )
+
+            # 7. Validate output file
+            #if not os.path.exists(final_video) or os.path.getsize(final_video) < 102400:
+            #    raise RuntimeError("Final video file creation failed")
+
+            # 8. Cleanup and completion
+            self.safe_cleanup(segments)
+            self.update_status("Video creation complete!", 100)
+            messagebox.showinfo("Success", f"Video saved to:\n{output_path}")
+            
+        except Exception as e:
+            error_msg = f"Video generation failed: {str(e)}"
+            logging.error(error_msg, exc_info=True)
+            self.root.after(0, messagebox.showerror, "Processing Error", error_msg)
+        finally:
+            self.running = False
+            self.futures = []
+
+    def _save_batch_debug_info(self, batch: List[str], batch_idx: int) -> None:
+        """Save debug information for failed batches"""
+        debug_dir = os.path.join(self.temp_manager.root_dir, "failed_batches")
+        os.makedirs(debug_dir, exist_ok=True)
+        
+        try:
+            # Save batch info
+            with open(os.path.join(debug_dir, f"batch_{batch_idx}_files.txt"), "w") as f:
+                f.write("\n".join(batch))
+            
+            # Save first image from batch
+            if batch:
+                img = Image.open(batch[0])
+                img.save(os.path.join(debug_dir, f"batch_{batch_idx}_sample.jpg"))
                 
         except Exception as e:
-            logging.error(f"Generation failed: {str(e)}")
-            messagebox.showerror("Error", str(e))
-        finally:
-            self.futures = []
-            self.running = False
-            self.temp_manager.cleanup()
+            logging.error(f"Failed to save debug info: {str(e)}")
 
-    def run_external_script(self, num_iterations: int):
-        """Execute external script with the integer parameter"""
+    def validate_images(self, paths: List[str]) -> dict:
+        """Validate image files for corruption and dimensions"""
+        results = {
+            'success': True,
+            'errors': [],
+            'checked': len(paths)
+        }
+        
+        for path in paths:
+            try:
+                if not os.path.exists(path):
+                    results['errors'].append(f"Missing file: {path}")
+                    continue
+                    
+                with Image.open(path) as img:
+                    img.verify()
+                    if img.size != self.expected_dimensions:
+                        results['errors'].append(
+                            f"Dimension mismatch in {os.path.basename(path)}: "
+                            f"Expected {self.expected_dimensions}, Got {img.size}"
+                        )
+                        
+            except Exception as e:
+                results['errors'].append(f"Invalid image {os.path.basename(path)}: {str(e)}")
+        
+        results['success'] = len(results['errors']) == 0
+        return results
+
+    def _process_images_to_video(self, images: List[Dict], output_path: str) -> bool:
+        """Core video processing with validation"""
         try:
-            self.update_status(f"Running script with {num_iterations} iterations...", 0)
+            # Validate images before processing
+            if not all(isinstance(img, dict) for img in images):
+                invalid = [img for img in images if not isinstance(img, dict)]
+                logging.error(f"Found {len(invalid)} invalid image entries")
+                return False
+
+            return self.video_processor.process(images, output_path)
+        except Exception as e:
+            logging.error(f"Video processing error: {str(e)}")
+            return False
+
+    def safe_cleanup(self, segments):
+        """Clean temporary files with validation"""
+        try:
+            # Clean temp SRT
+            if os.path.exists("temp.srt"):
+                os.remove("temp.srt")
+                
+            # Clean video segments
+            for seg in segments:
+                if os.path.exists(seg):
+                    os.remove(seg)
+                    
+            # Clean temp manager files
+            self.temp_manager.cleanup()
             
-            # Build command (modify for your script path)
-            script_path = os.path.join(os.path.dirname(__file__), "processors/editSrtFileTime.py")
-            command = f"python {script_path} {num_iterations}"
+        except Exception as cleanup_error:
+            logging.warning(f"Cleanup failed: {str(cleanup_error)}")
+
+    def run_external_script(self, delay: int):
+        try:
+            self.update_status("Adjusting SRT timings...", 0)
+            script_path = os.path.join(os.path.dirname(__file__), "processors", "editSrtFileTime.py")
             
-            # Run with progress tracking
-            process = subprocess.Popen(
-                command.split(),
+            # Create temp directory if not exists
+            self.temp_manager._init_dirs()
+            
+            # Use proper temp file path
+            adjusted_srt = os.path.join(self.temp_manager.root_dir, "temp.srt")
+            command = [
+                "python", script_path,
+                self.srt_path,
+                str(delay),
+                adjusted_srt  # Use full temp path instead of "temp.srt"
+            ]
+            
+            process = subprocess.run(
+                command,
+                check=True,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=30,
+                cwd=self.temp_manager.root_dir  # Run in temp directory
             )
             
-            # Read output in real-time
-            while True:
-                output = process.stdout.readline()
-                if output == '' and process.poll() is not None:
-                    break
-                if output:
-                    self.root.after(0, self.parse_script_output, output.strip())
+            # Verify output file creation
+            if not os.path.exists(adjusted_srt):
+                raise RuntimeError("SRT adjustment failed to create output file")
+                
+            self.root.after(0, self.prompt_for_output_and_generate)
             
-            if process.returncode != 0:
-                raise RuntimeError(f"Script failed with code {process.returncode}")
+        except subprocess.CalledProcessError as e:
+            error_msg = f"SRT adjustment failed:\n{e.stderr}"
+            logging.error(f"STDOUT: {e.stdout}\nSTDERR: {e.stderr}")
             
-            self.update_status("Script completed successfully", 100)
         except Exception as e:
-            self.root.after(0, messagebox.showerror, "Script Error", str(e))
+            error_msg = f"SRT adjustment error: {str(e)}"
+            logging.error(error_msg, exc_info=True)
+            
         finally:
             self.running = False
 
-    def parse_script_output(self, output: str):
-        """Handle script output updates"""
-        # Example progress parsing - modify according to your script's output
-        if "Progress:" in output:
-            try:
-                progress = int(output.split(":")[1].strip().replace('%', ''))
-                self.update_status(f"Processing... {progress}%", progress)
-            except ValueError:
-                pass
-        logging.info(f"Script Output: {output}")        
+    def prompt_for_output_and_generate(self):
+        """Main thread: Get output path and start processing"""
+        output_path = filedialog.asksaveasfilename(
+            defaultextension=".mp4",
+            filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")]
+        )
+        
+        if output_path:
+            threading.Thread(
+                target=self.generate_video,
+                args=(output_path,),
+                daemon=True
+            ).start()
+        else:
+            self.running = False       
 
     def update_status(self, message: str, progress: int):
         self.root.after(0, self.progress_label.config, {'text': message})

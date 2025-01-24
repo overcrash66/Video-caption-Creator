@@ -9,9 +9,9 @@ import uuid
 
 class TempFileManager:
     def __init__(self, log_file: str = "srt_converter.log"):
-        self.base_dir = os.path.abspath("video_gen_temp")
-        self.image_dir = os.path.join(self.base_dir, "images")
-        self.process_dir = os.path.join(self.base_dir, "process")
+        self.root_dir = os.path.abspath("video_gen_temp")
+        self.image_dir = os.path.join(self.root_dir, "images")
+        self.process_dir = os.path.join(self.root_dir, "process")
         self.log_file = log_file
         self._init_dirs()
         self._start_log_cleaner()
@@ -50,7 +50,7 @@ class TempFileManager:
     def cleanup(self):
         """Clean temporary directories"""
         try:
-            shutil.rmtree(self.base_dir, ignore_errors=True)
+            shutil.rmtree(self.root_dir, ignore_errors=True)
             self._init_dirs()
         except Exception as e:
             logging.error(f"Cleanup error: {str(e)}")
@@ -59,3 +59,8 @@ class TempFileManager:
         """Clean everything including logs"""
         self.cleanup()
         self._clean_old_logs()
+
+    def verify_file(self, filename: str) -> bool:
+        """Check if a file exists in root directory"""
+        path = os.path.join(self.root_dir, filename)
+        return os.path.exists(path) and os.path.getsize(path) > 0    
