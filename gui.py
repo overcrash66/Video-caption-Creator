@@ -18,9 +18,15 @@ class VideoConverterApp:
         self.root = root
         self.root.title("Video Caption Creator")
         self.root.geometry("1000x750")
-        self.futures = []
-
-        # Initialize Tkinter variables
+        self.initialize_app()
+        
+    def initialize_app(self):
+        """Initialize/Restart application state"""
+        # Clear existing widgets if any
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        
+        # Reset all variables
         self.text_color_var = tk.StringVar(value="#FFFFFF")
         self.bg_color_var = tk.StringVar(value="#000000")
         self.font_size_var = tk.IntVar(value=24)
@@ -30,9 +36,37 @@ class VideoConverterApp:
         self.background_music_path = None
         self.custom_font_path = None
         self.srt_path = None
+        self.user_value_var = tk.StringVar()
+        self.user_value_var = tk.StringVar(value="-400")
 
-        # Initialize settings dictionary
-        self.settings = {
+        # Reset processing state
+        self.running = False
+        self.futures = []
+        
+        # Reinitialize components
+        self.temp_manager = TempFileManager(log_file="srt_converter.log")
+        self.srt_parser = SRTParser()
+        self.style_parser = StyleParser()
+        self.image_generator = ImageGenerator(
+            self.temp_manager,
+            self.style_parser,
+            self.get_current_settings()
+        )
+        self.video_processor = VideoProcessor(
+            self.temp_manager,
+            self.get_current_settings()
+        )
+
+        # Rebuild UI
+        self.setup_styles()
+        self.create_widgets()
+        self.setup_logging()
+        
+        self.root.after(100, self.update_color_labels)
+
+    def get_current_settings(self):
+        """Return current settings dictionary"""
+        return {
             'text_color': self.text_color_var.get(),
             'bg_color': self.bg_color_var.get(),
             'font_size': self.font_size_var.get(),
@@ -46,30 +80,22 @@ class VideoConverterApp:
             'batch_size': 50
         }
 
-        # Initialize components
-        self.temp_manager = TempFileManager(log_file="srt_converter.log")
-        self.srt_parser = SRTParser()
-        self.style_parser = StyleParser()
-        self.image_generator = ImageGenerator(
-            self.temp_manager,
-            self.style_parser,
-            self.settings
-        )
-        self.video_processor = VideoProcessor(
-            self.temp_manager,
-            self.settings
-        )
-
-        # GUI state
-        self.running = False
-        self.preview_window = None
-
-        # Configure styles and widgets
-        self.setup_styles()
-        self.create_widgets()
-        self.setup_logging()
-
-        self.root.after(100, self.update_color_labels)
+    def reset_application(self):
+        """Full application reset handler"""
+        if messagebox.askyesno(
+            "Confirm Reset",
+            "This will reset all settings and clear temporary files.\nContinue?"
+        ):
+            # Cancel any ongoing operations
+            self.cancel_generation()
+            
+            # Clean up resources
+            self.temp_manager.cleanup()
+            
+            # Reinitialize application
+            self.initialize_app()
+            
+            messagebox.showinfo("Reset Complete", "Application has been reset to default state")
 
     def setup_styles(self):
         self.style = ttk.Style()
@@ -86,6 +112,20 @@ class VideoConverterApp:
         # Settings Panel
         settings_frame = ttk.LabelFrame(main_frame, text="Settings", padding=10)
         settings_frame.pack(fill=tk.X, pady=10)
+
+        # Add input section
+        input_frame = ttk.Frame(main_frame)
+        input_frame.pack(fill=tk.X, pady=10)
+        
+        # Integer input box for Edit SRT file delay
+        ttk.Label(input_frame, text="Edit SRT file delay:").pack(side=tk.LEFT)
+        self.num_input = ttk.Entry(
+            input_frame,
+            textvariable=self.user_value_var,
+            validate='key',
+            validatecommand=(self.root.register(self.validate_int), '%P')
+        )
+        self.num_input.pack(side=tk.LEFT, padx=5)
 
         # Color Controls
         ttk.Button(settings_frame, text="Text Color", 
@@ -154,12 +194,34 @@ class VideoConverterApp:
         ttk.Button(btn_frame, text="Cancel", 
                  command=self.cancel_generation).pack(side=tk.LEFT, padx=5)
         
+        #Reset buton
+        reset_frame = ttk.Frame(self.root)
+        reset_frame.pack(pady=10, fill=tk.X)
+        ttk.Button(
+            reset_frame,
+            text="Reset Application",
+            command=self.reset_application,
+            style='Danger.TButton'
+        ).pack(side=tk.LEFT, padx=5)
+
+        #Add SRT file
         ttk.Button(settings_frame, text="Select SRT File", 
                  command=self.choose_srt_file).grid(row=7, column=0, pady=5)
         self.srt_label = ttk.Label(settings_frame, text="No SRT file selected")
         self.srt_label.grid(row=7, column=1, padx=5)
 
         self.update_color_labels()
+
+    @staticmethod
+    def validate_int(new_value):
+        """Validation for integer input (including negatives)"""
+        if new_value == "":
+            return False  # Disallow empty field
+        try:
+            int(new_value)
+            return True
+        except ValueError:
+            return False
 
     def update_settings(self):
         """Ensure settings are properly separated"""
@@ -349,6 +411,7 @@ class VideoConverterApp:
 
 
     def start_generation(self):
+        #should change exec external script here
         if not self.running:
             if not self.srt_path:
                 messagebox.showerror("Error", "Please select an SRT file first")
@@ -368,7 +431,22 @@ class VideoConverterApp:
             if not output_path:
                 self.running = False
                 return
-            
+            #add logic of changing srt file name
+            try:
+                # Get and validate input value
+                user_input = self.user_value_var.get()
+                num_iterations = int(user_input) if user_input else -400  # Default value
+                
+                self.running = True
+                threading.Thread(
+                    target=self.run_external_script,
+                    args=(num_iterations,),
+                    daemon=True
+                ).start()
+            except ValueError:
+                messagebox.showerror("Invalid Input", "Please enter a valid integer")
+                self.running = False
+
             self.update_status("Parsing SRT...", 0)
             entries = self.srt_parser.parse(self.srt_path)
             
@@ -408,6 +486,7 @@ class VideoConverterApp:
                 self.update_status("Combining segments...", 75)
                 if self.video_processor.combine_segments(segments, output_path, self.settings['background_music']):
                     self.update_status("Complete!", 100)
+                    #maybe add logic to delete temp srt file that was edited
                     messagebox.showinfo("Success", f"Video saved to:\n{output_path}")
                 else:
                     messagebox.showerror("Error", "Failed to combine segments")
@@ -419,6 +498,51 @@ class VideoConverterApp:
             self.futures = []
             self.running = False
             self.temp_manager.cleanup()
+
+    def run_external_script(self, num_iterations: int):
+        """Execute external script with the integer parameter"""
+        try:
+            self.update_status(f"Running script with {num_iterations} iterations...", 0)
+            
+            # Build command (modify for your script path)
+            script_path = os.path.join(os.path.dirname(__file__), "processors/editSrtFileTime.py")
+            command = f"python {script_path} {num_iterations}"
+            
+            # Run with progress tracking
+            process = subprocess.Popen(
+                command.split(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True
+            )
+            
+            # Read output in real-time
+            while True:
+                output = process.stdout.readline()
+                if output == '' and process.poll() is not None:
+                    break
+                if output:
+                    self.root.after(0, self.parse_script_output, output.strip())
+            
+            if process.returncode != 0:
+                raise RuntimeError(f"Script failed with code {process.returncode}")
+            
+            self.update_status("Script completed successfully", 100)
+        except Exception as e:
+            self.root.after(0, messagebox.showerror, "Script Error", str(e))
+        finally:
+            self.running = False
+
+    def parse_script_output(self, output: str):
+        """Handle script output updates"""
+        # Example progress parsing - modify according to your script's output
+        if "Progress:" in output:
+            try:
+                progress = int(output.split(":")[1].strip().replace('%', ''))
+                self.update_status(f"Processing... {progress}%", progress)
+            except ValueError:
+                pass
+        logging.info(f"Script Output: {output}")        
 
     def update_status(self, message: str, progress: int):
         self.root.after(0, self.progress_label.config, {'text': message})

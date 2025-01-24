@@ -1,4 +1,11 @@
 import sys
+import time
+
+def main(iterations):
+    for i in range(iterations):
+        progress = (i+1) * 100 // iterations
+        print(f"Progress: {progress}%")
+        time.sleep(0.5)  # Simulate work
 
 def timecode_to_ms(tc):
     """Convert timecode to milliseconds."""
@@ -78,4 +85,8 @@ if __name__ == '__main__':
         print("Usage: python editSrtFileTime.py <input.srt> <delay_ms> <output.srt>")
         sys.exit(1)
     
-    process_srt(sys.argv[1], int(sys.argv[2]), sys.argv[3])
+    try:
+        process_srt(sys.argv[1], int(sys.argv[2]), sys.argv[3])
+    except Exception as e:
+        print("Script Error"+ str(e))
+        sys.exit(1)    
