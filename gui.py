@@ -14,6 +14,8 @@ import json
 import subprocess
 from typing import List, Dict, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
+from processors.sub2audio import SubToAudio
+from pydub import AudioSegment
 
 class VideoConverterApp:
     def __init__(self, root):
@@ -21,6 +23,7 @@ class VideoConverterApp:
         self.root.title("Video Caption Creator")
         self.root.geometry("1000x750")
         self.preview_window = None
+        self.current_tts = None 
 
         # Initialize app components in correct order
         self.initialize_app()  # 1. Variables and core components
@@ -28,22 +31,48 @@ class VideoConverterApp:
         self.create_widgets()  # 3. Create GUI elements
         self.setup_logging()   # 4. Configure logging
 
+    def get_default_settings(self):
+        """Get safe default settings for initialization"""
+        return {
+            'text_color': "#FFFFFF",
+            'bg_color': "#000000",
+            'font_size': 24,
+            'text_border': True,
+            'text_shadow': False,
+            'margin': 20,
+            'speed_factor': 1.0,
+            'batch_size': 50,
+            'user_value': 500,
+            'tts_model': "",
+            'tts_language': "fr"
+        }
+
     def get_current_settings(self) -> dict:
         """Safely get current settings with null checks"""
-        return {
+        settings = {
             'text_color': self.text_color_var.get(),
             'bg_color': self.bg_color_var.get(),
             'font_size': self.font_size_var.get(),
             'text_border': self.border_var.get(),
             'text_shadow': self.shadow_var.get(),
             'background_image': self.background_image_path,
-            'background_music': self.background_music_path,
+            'background_music': self.generated_audio_path,
             'custom_font': self.custom_font_path,
             'margin': 20,
             'speed_factor': 1.0,
             'batch_size': 50,
-            'user_value': self._safe_int_get(self.user_value_var, 500)
+            'user_value': self._safe_int_get(self.user_value_var, 500),
+            'tts_model': self.model_var.get(),
+            'reference_audio': self.speaker_ref_path
         }
+
+        # Safe language combo handling
+        if hasattr(self, 'lang_combo') and self.lang_combo:
+            settings['tts_language'] = self.lang_combo.get()
+        else:
+            settings['tts_language'] = self.language_var.get()  # Use the StringVar value
+            
+        return settings
 
     def _safe_int_get(self, var: tk.StringVar, default: int) -> int:
         """Safely get integer value from StringVar"""
@@ -54,52 +83,150 @@ class VideoConverterApp:
 
     def initialize_app(self):
         """Initialize all application state and components in correct order"""
-        # 1. Initialize Tkinter variables first
+        # 1. Initialize core attributes first
+        self.settings = {
+            'batch_size': 50,
+            'expected_dimensions': (1280, 720)
+        }
+        self.generated_audio_path = None
+        self.speaker_ref_path = None
+        self.background_image_path = None
+        self.custom_font_path = None
+        self.srt_path = None
+        self.tts_models = []
+        self.current_tts = None
+
+        # 2. Initialize Tkinter variables
         self.text_color_var = tk.StringVar(value="#FFFFFF")
         self.bg_color_var = tk.StringVar(value="#000000")
         self.font_size_var = tk.IntVar(value=24)
         self.border_var = tk.BooleanVar(value=True)
         self.shadow_var = tk.BooleanVar(value=False)
         self.user_value_var = tk.StringVar(value="500")
+        self.model_var = tk.StringVar()
+
+        self.lang_combo = None
+        self.language_var = tk.StringVar(value="fr")
+
+        # 3. Initialize core components
         self.expected_dimensions = (1280, 720)
-
-        self.settings = {
-            'batch_size': 50,  # Default value
-            'expected_dimensions': self.expected_dimensions
-        }
-
-        # 2. Initialize file paths
-        self.background_image_path = None
-        self.background_music_path = None
-        self.custom_font_path = None
-        self.srt_path = None
-
-        # 3. Initialize core components with default settings
         self.temp_manager = TempFileManager()
         self.style_parser = StyleParser()
         self.srt_parser = SRTParser()
 
-        # 4. Get initial settings from variables
+        # 4. Get initial settings AFTER core initialization
         initial_settings = self.get_current_settings()
 
         # 5. Create processing components with initial settings
         self.image_generator = ImageGenerator(
             self.temp_manager,
             self.style_parser,
-            self.get_current_settings()
+            initial_settings
         )
 
         self.video_processor = VideoProcessor(
             self.temp_manager,
-            self.get_current_settings()
+            initial_settings
         )
 
-        # 6. Initialize other state
+        # 6. Initialize remaining state
         self.running = False
         self.preview_window = None
         self.futures = []
 
-        self.update_settings()
+        # 7. Load TTS models
+        self.load_tts_models()
+        self.check_tts_installation()
+
+    def check_tts_installation(self):
+        """Verify TTS is properly installed and has models"""
+        try:
+            from TTS.api import TTS
+            temp_tts = TTS()
+            if not temp_tts.list_models():
+                messagebox.showwarning(
+                    "Missing Models",
+                    "No TTS models installed!\n"
+                    "Please install at least one model to continue.\n"
+                    "You can install models via command line:\n"
+                    "tts --model_name [model_name] --model_path [path/to/model]"
+                )
+        except ImportError:
+            messagebox.showerror(
+                "Missing Dependency",
+                "Coqui TTS not installed!\n"
+                "Install with: pip install TTS"
+            )
+            self.root.destroy()
+
+    def load_tts_models(self):
+        """Load available TTS models into combobox"""
+        if hasattr(self, 'model_combo'):  # Check if widget exists
+            threading.Thread(target=self._populate_models, daemon=True).start()
+
+    def _populate_models(self):
+        """Thread-safe model loading"""
+        try:
+            model_names = SubToAudio().coqui_model()
+            valid_models = [m for m in model_names if SubToAudio()._model_exists(m)]
+            
+            if self.root.winfo_exists():
+                self.root.after(0, self._update_model_dropdown, valid_models)
+                
+        except Exception as e:
+            error_msg = f"Model loading failed: {str(e)}"
+            logging.error(error_msg)
+            if self.root.winfo_exists():
+                self.root.after(0, lambda: messagebox.showerror("Model Error", error_msg))
+
+    def _update_model_dropdown(self, models):
+        """Update model dropdown safely"""
+        if not self.root.winfo_exists():
+            return
+        
+        if models:
+            self.model_combo['values'] = models
+            self.model_var.set(models[0])
+        else:
+            self.model_combo.set("No models available")
+
+    def _on_model_selected(self, event=None):
+        """Handle model selection and populate languages"""
+        model = self.model_var.get()
+        if not model:
+            return
+
+        try:
+            # Corrected variable name from current_ts to current_tts
+            self.current_tts = SubToAudio(model_name=model)
+            langs = self.current_tts.languages()
+            
+            self.lang_combo['values'] = langs
+            self.lang_combo.set(langs[0] if langs else "en")
+            
+        except Exception as e:
+            messagebox.showerror("Model Error", f"Failed to initialize model: {str(e)}")
+            print(f"Error loading model: {str(e)}")  # Debug log
+
+    def languages(self) -> list:
+        """Get supported languages for the current model"""
+        try:
+            if hasattr(self, 'model_name') and "xtts" in self.model_name.lower():
+                return ["en", "es", "fr", "de", "it", "pt", "pl", 
+                       "tr", "ru", "nl", "cs", "ar", "zh", "ja"]
+            return self.apitts.languages or ["fr"]
+        except AttributeError:
+            return ["fr"]  # Default
+
+    def _show_loading_models(self):
+        self.model_combo['values'] = ["Loading models..."]
+        self.model_combo['state'] = 'disabled'
+
+    def _show_model_error(self, message):
+        self.model_combo['values'] = ["Error - Click for details"]
+        self.model_combo['state'] = 'readonly'
+        self.model_combo.bind('<<ComboboxSelected>>', 
+                            lambda e: messagebox.showerror("Model Error", message))
 
     def _safe_var_get(self, var, default):
         """Safely get variable value with fallback"""
@@ -159,6 +286,10 @@ class VideoConverterApp:
             )
             self.num_input.pack(side=tk.LEFT, padx=5)
 
+             # Preview Button
+            ttk.Button(settings_frame, text="Preview Style", 
+                     command=self.show_preview).grid(row=6, column=0, pady=5)
+
             # Color Controls
             ttk.Button(settings_frame, text="Text Color",
                      command=self.choose_text_color).grid(row=0, column=0, pady=5)
@@ -196,20 +327,48 @@ class VideoConverterApp:
 
             # Effects Checkboxes
             ttk.Checkbutton(settings_frame, text="Text Border",
-                          variable=self.border_var).grid(row=8, column=5, padx=5)
+                          variable=self.border_var).grid(row=7, column=5, padx=5)
             ttk.Checkbutton(settings_frame, text="Text Shadow",
-                          variable=self.shadow_var).grid(row=9, column=5, padx=5)
+                          variable=self.shadow_var).grid(row=8, column=5, padx=5)
 
             # Media Controls
             ttk.Button(settings_frame, text="Background Image",
                      command=self.choose_background_image).grid(row=6, column=5, padx=5)
 
-            ttk.Button(settings_frame, text="Background Music",
-                     command=self.choose_background_music).grid(row=9, column=0, padx=5)
+            # TTS Controls Section
+            tts_frame = ttk.LabelFrame(settings_frame, text="Text-to-Speech Settings", padding=10)
+            tts_frame.grid(row=9, column=0, columnspan=6, sticky="ew", pady=5)
 
-            # Preview Button
-            ttk.Button(settings_frame, text="Preview Style",
-                     command=self.show_preview).grid(row=4, column=5, columnspan=2, padx=5)
+            # Model Selection
+            ttk.Label(tts_frame, text="Model:").grid(row=0, column=0, sticky='w')
+            self.model_combo = ttk.Combobox(
+                tts_frame, 
+                textvariable=self.model_var,
+                state='readonly',
+                width=40
+            )
+            self.model_combo.grid(row=0, column=1, padx=5)
+            self.model_combo.bind('<<ComboboxSelected>>', self._on_model_selected)
+
+            # Reference Audio
+            ttk.Button(
+                tts_frame, 
+                text="Reference Audio",
+                command=self.choose_reference_audio
+            ).grid(row=1, column=0, pady=5)
+            self.ref_audio_label = ttk.Label(tts_frame, text="No audio selected")
+            self.ref_audio_label.grid(row=1, column=1, sticky='w')
+
+            # Language Selection
+            ttk.Label(tts_frame, text="Language:").grid(row=2, column=0)
+            self.lang_combo = ttk.Combobox(
+                tts_frame, 
+                textvariable=self.language_var,  # Link to StringVar
+                state='readonly',
+                width=15
+            )
+            self.lang_combo.grid(row=2, column=1)
+            self.lang_combo.set("fr")  # Initial value
 
             # Progress Area
             progress_frame = ttk.Frame(main_frame)
@@ -256,6 +415,10 @@ class VideoConverterApp:
 
             self.update_color_labels()
 
+            # Load models on startup
+            self.load_tts_models()
+            #self.create_tts_controls()
+
         except AttributeError as ae:
             logging.critical(f"Widget creation failed: {str(ae)}")
             messagebox.showerror("Fatal Error", "Application failed to initialize")
@@ -282,7 +445,7 @@ class VideoConverterApp:
             'text_border': self.border_var.get(),
             'text_shadow': self.shadow_var.get(),
             'background_image': self.background_image_path,
-            'background_music': self.background_music_path,
+            'background_music': self.generated_audio_path,
             'custom_font': self.custom_font_path,
             'speed_factor': 1.0,
             'margin': 20,
@@ -303,6 +466,75 @@ class VideoConverterApp:
         r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
         luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
         return luminance < 0.5
+
+    def choose_reference_audio(self):
+        """Handle reference audio file selection"""
+        file_path = filedialog.askopenfilename(
+            filetypes=[
+                ("Audio Files", "*.wav *.mp3 *.ogg *.flac"),
+                ("All Files", "*.*")
+            ]
+        )
+        
+        if file_path:
+            # Validate audio file
+            try:
+                AudioSegment.from_file(file_path)
+                self.speaker_ref_path = file_path
+                self.ref_audio_label.config(text=os.path.basename(file_path))
+            except Exception as e:
+                messagebox.showerror("Invalid Audio", f"Could not read audio file:\n{str(e)}")
+                self.speaker_ref_path = None
+                self.ref_audio_label.config(text="Invalid audio file")
+
+    def clear_reference_audio(self):
+        """Clear selected reference audio"""
+        self.speaker_ref_path = None
+        self.ref_audio_label.config(text="No audio selected")
+
+    def create_tts_controls(self):
+        """Create TTS widgets with audio file selection"""
+        tts_frame = ttk.LabelFrame(self.settings_frame, text="XTTS v2 Settings", padding=10)
+        tts_frame.pack(fill=tk.X, pady=5)
+
+        # Reference audio selection
+        ttk.Button(
+            tts_frame,
+            text="Reference Speaker Audio",
+            command=self.choose_speaker_ref
+        ).pack(side=tk.LEFT, padx=5)
+        
+        self.speaker_ref_label = ttk.Label(tts_frame, text="No audio selected")
+        self.speaker_ref_label.pack(side=tk.LEFT, padx=5)
+        
+        # Language selection
+        self.xtts_lang_combo = ttk.Combobox(
+            tts_frame,
+            values=["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh", "ja"],
+            state='readonly',
+            width=5
+        )
+        self.xtts_lang_combo.pack(side=tk.LEFT, padx=5)
+        self.xtts_lang_combo.set("fr")
+
+    def choose_speaker_ref(self):
+        """Select reference speaker audio file"""
+        file_path = filedialog.askopenfilename(
+            filetypes=[
+                ("Audio Files", "*.wav *.mp3 *.flac"),
+                ("All Files", "*.*")
+            ]
+        )
+        if file_path:
+            # Validate audio file
+            try:
+                AudioSegment.from_file(file_path)
+                self.speaker_ref_path = file_path
+                self.speaker_ref_label.config(text=os.path.basename(file_path))
+            except Exception as e:
+                messagebox.showerror("Invalid Audio", f"Could not read audio file:\n{str(e)}")
+                self.speaker_ref_path = None
+                self.speaker_ref_label.config(text="Invalid file")
 
     def update_color_labels(self):
         """Update both color labels' appearance"""
@@ -348,12 +580,6 @@ class VideoConverterApp:
         if file_path:
             self.background_image_path = file_path
             logging.info(f"Selected background image: {file_path}")
-
-    def choose_background_music(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Audio Files", "*.mp3 *.wav")])
-        if file_path:
-            self.background_music_path = file_path
-            logging.info(f"Selected background music: {file_path}")
 
     def choose_srt_file(self):
         """Handle SRT file selection"""
@@ -473,16 +699,87 @@ class VideoConverterApp:
                 return
 
             try:
-                delay = int(self.user_value_var.get())
                 self.running = True
                 threading.Thread(
-                    target=self.run_external_script,
-                    args=(delay,),
+                    target=self.run_full_processing,
                     daemon=True
                 ).start()
-            except ValueError:
-                messagebox.showerror("Invalid Input", "Please enter a valid integer")
+            except Exception as e:
+                messagebox.showerror("Error", str(e))
                 self.running = False
+
+    def run_full_processing(self):
+        try:
+            # Step 1: Adjust SRT timing
+            self.update_status("Adjusting SRT timings...", 0)
+            self.run_external_script(int(self.user_value_var.get()))
+            
+            # Step 2: Generate audio from subtitles
+            self.update_status("Generating audio...", 25)
+            self.generate_audio()  # This must complete before proceeding
+            
+            # Step 3: Get output path after audio generation completes
+            output_path = self.prompt_for_output_path()
+            if not output_path:
+                return
+                
+            # Step 4: Start video generation with confirmed path
+            self.root.after(0, self.start_video_generation, output_path)
+            
+        except Exception as e:
+            self.root.after(0, messagebox.showerror, "Processing Error", str(e))
+            self.running = False
+
+    def prompt_for_output_path(self) -> Optional[str]:
+        """Get output path from user in main thread"""
+        if not self.root.winfo_exists():
+            return None
+        
+        output_path = []
+        # Use a semaphore to wait for main thread response
+        lock = threading.Event()
+        
+        def get_path():
+            path = filedialog.asksaveasfilename(
+                defaultextension=".mp4",
+                filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")]
+            )
+            output_path.append(path)
+            lock.set()
+        
+        self.root.after(0, get_path)
+        lock.wait()  # Wait for user response
+        
+        return output_path[0] if output_path else None
+    
+    def start_video_generation(self, output_path: str):
+        """Start video processing with confirmed path"""
+        threading.Thread(
+            target=self.generate_video,
+            args=(output_path,),
+            daemon=True
+        ).start()
+
+    def generate_audio(self):
+        """Generate audio using selected model and settings"""
+        if not self.current_tts:
+            messagebox.showerror("Error", "No TTS model initialized!")
+            return
+            
+        try:
+            output_path = os.path.join(self.temp_manager.root_dir, "generated_audio.wav")
+            self.current_tts.convert_to_audio(
+                sub_data=self.current_tts.subtitle(self.srt_path),
+                language=self.lang_combo.get(),
+                speaker_wav=self.speaker_ref_path,
+                output_path=output_path
+            )
+            self.generated_audio_path = output_path
+            self.settings['background_music'] = output_path
+
+        except Exception as e:
+            logging.error(f"Audio generation failed: {str(e)}")
+            raise RuntimeError(f"TTS Error: {str(e)}")
 
     def verify_temp_files(image_dicts: List[Dict]):
         """Emergency file system verification"""
@@ -511,9 +808,20 @@ class VideoConverterApp:
 
     def generate_video(self, output_path: str) -> None:
         """Process subtitle entries into a video with audio"""
+        segments = []
         try:
             self.update_settings()
             self.update_status("Initializing video generation...", 0)
+
+            #if not os.path.exists(self.generated_audio_path):
+            #    raise FileNotFoundError("XTTS generated audio not found")
+                
+            # Existing video generation code
+            final_video = self.video_processor.combine_segments(
+                segments,
+                output_path,
+                self.generated_audio_path  # Use XTTS generated audio
+            )
 
             if not self.temp_manager.verify_file("temp.srt"):
                 raise FileNotFoundError("Adjusted SRT file not found or empty")
