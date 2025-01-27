@@ -46,7 +46,7 @@ class StyleParser:
         elif tag_name == 'i':
             styles['current_style']['italic'] = True
         elif tag_name == 'center':
-            styles['current_style']['align'] = 'center'
+            styles['current_style']['align'] = 'center'  # Apply center alignment
         elif tag_name == 'font':
             attrs = self.parse_font_attributes(tag_lower)
             styles['current_style'].update(attrs)

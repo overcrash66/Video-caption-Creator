@@ -15,7 +15,7 @@ class SRTParser:
             with open(file_path, 'r', encoding='utf-8-sig') as f:
                 content = f.read()
                 raw_entries = re.split(r'\n\s*\n', content.strip())
-                
+            
                 for raw_entry in raw_entries:
                     entry = self.parse_entry(raw_entry)
                     if entry:

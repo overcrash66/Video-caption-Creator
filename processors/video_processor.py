@@ -51,7 +51,7 @@ class VideoProcessor:
         try:
             # Remove failed batches
             valid = [s for s in segments if s is not None]
-            
+        
             # Sort by batch index from filename
             valid.sort(key=lambda x: int(os.path.basename(x).split('_')[1].split('.')[0]))
             return valid
@@ -60,7 +60,6 @@ class VideoProcessor:
             return []
 
     def process_batch(self, batch: List[Dict], batch_idx: int) -> Optional[str]:
-        """Process a batch of images into a video segment."""
         process_dir = None
         list_file = None
         try:
@@ -86,7 +85,7 @@ class VideoProcessor:
                     logging.info(f"Processing batch {batch_idx} with {len(batch)} images")
                     img_path = img.get('path')
                     duration = img.get('duration', 1.0)
-                    
+                
                     if not img_path or not os.path.exists(img_path):
                         logging.error(f"Invalid image in batch {batch_idx}: {img_path}")
                         continue

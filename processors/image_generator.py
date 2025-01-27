@@ -14,19 +14,19 @@ class ImageGenerator:
 
     def generate_images(self, entries: List[Dict]) -> List[Dict]:
         generated = [None] * len(entries)  # Pre-allocate to maintain positions
-        
+    
         for idx, entry in enumerate(entries):
             try:
                 if self._has_style_tags(entry['text']):
                     img_info = self.generate_styled_image(entry, idx)
                 else:
                     img_info = self.generate_simple_image(entry, idx)
-                
+            
                 if img_info and self._validate_image(img_info['path']):
                     generated[idx] = img_info  # Maintain original index position
             except Exception as e:
                 logging.error(f"Image generation failed for entry {idx}: {str(e)}")
-        
+    
         return [img for img in generated if img is not None]  # Filter out failures
 
     def generate_preview(self, text: str) -> Image.Image:

@@ -42,7 +42,7 @@ class VideoConverterApp:
             'margin': 20,
             'speed_factor': 1.0,
             'batch_size': 50,
-            'user_value': self._safe_int_get(self.user_value_var, 500)
+            'user_value': self._safe_int_get(self.user_value_var, 0)
         }
 
     def _safe_int_get(self, var: tk.StringVar, default: int) -> int:
@@ -60,7 +60,7 @@ class VideoConverterApp:
         self.font_size_var = tk.IntVar(value=24)
         self.border_var = tk.BooleanVar(value=True)
         self.shadow_var = tk.BooleanVar(value=False)
-        self.user_value_var = tk.StringVar(value="500")
+        self.user_value_var = tk.StringVar(value="0")
         self.expected_dimensions = (1280, 720)
 
         self.settings = {
@@ -244,7 +244,7 @@ class VideoConverterApp:
             self.srt_label.grid(row=7, column=1, padx=5)
 
             #self.num_input.delete(0, tk.END)
-            #self.num_input.insert(0, "500")
+            #self.num_input.insert(0, "100")
             
             # Reset color labels
             self.text_color_label.config(bg="#FFFFFF", fg="black")
@@ -484,31 +484,6 @@ class VideoConverterApp:
                 messagebox.showerror("Invalid Input", "Please enter a valid integer")
                 self.running = False
 
-    def verify_temp_files(image_dicts: List[Dict]):
-        """Emergency file system verification"""
-        existing = 0
-        missing = 0
-        invalid = 0
-
-        for img in image_dicts[:100]:  # Check first 100 files
-            path = img.get('path', '')
-            if not os.path.exists(path):
-                missing += 1
-                continue
-            try:
-                with Image.open(path) as im:
-                    im.verify()
-                existing +=1
-            except:
-                invalid +=1
-
-        logging.critical(
-            f"File System Check:\n"
-            f"Existing: {existing}\n"
-            f"Missing: {missing}\n"
-            f"Corrupted: {invalid}"
-        )
-
     def generate_video(self, output_path: str) -> None:
         """Process subtitle entries into a video with audio"""
         try:
@@ -638,20 +613,6 @@ class VideoConverterApp:
 
         results['success'] = len(results['errors']) == 0
         return results
-
-    def _process_images_to_video(self, images: List[Dict], output_path: str) -> bool:
-        """Core video processing with validation"""
-        try:
-            # Validate images before processing
-            if not all(isinstance(img, dict) for img in images):
-                invalid = [img for img in images if not isinstance(img, dict)]
-                logging.error(f"Found {len(invalid)} invalid image entries")
-                return False
-
-            return self.video_processor.process(images, output_path)
-        except Exception as e:
-            logging.error(f"Video processing error: {str(e)}")
-            return False
 
     def safe_cleanup(self, segments):
         """Clean temporary files with validation"""
