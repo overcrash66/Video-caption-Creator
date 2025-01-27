@@ -42,7 +42,7 @@ class VideoConverterApp:
             'margin': 20,
             'speed_factor': 1.0,
             'batch_size': 50,
-            'user_value': 500,
+            'user_value': 100,
             'tts_model': "",
             'tts_language': "fr"
         }
@@ -61,7 +61,7 @@ class VideoConverterApp:
             'margin': 20,
             'speed_factor': 1.0,
             'batch_size': 50,
-            'user_value': self._safe_int_get(self.user_value_var, 500),
+            'user_value': self._safe_int_get(self.user_value_var, 100),
             'tts_model': self.model_var.get(),
             'reference_audio': self.speaker_ref_path
         }
@@ -102,7 +102,7 @@ class VideoConverterApp:
         self.font_size_var = tk.IntVar(value=24)
         self.border_var = tk.BooleanVar(value=True)
         self.shadow_var = tk.BooleanVar(value=False)
-        self.user_value_var = tk.StringVar(value="500")
+        self.user_value_var = tk.StringVar(value="100")
         self.model_var = tk.StringVar()
 
         self.lang_combo = None
@@ -202,7 +202,7 @@ class VideoConverterApp:
             langs = self.current_tts.languages()
             
             self.lang_combo['values'] = langs
-            self.lang_combo.set(langs[0] if langs else "en")
+            self.lang_combo.set(langs[0] if langs else "fr")
             
         except Exception as e:
             messagebox.showerror("Model Error", f"Failed to initialize model: {str(e)}")
@@ -383,6 +383,10 @@ class VideoConverterApp:
             btn_frame.pack(pady=10)
             ttk.Button(btn_frame, text="Generate Video",
                      command=self.start_generation).pack(side=tk.LEFT)
+
+            ttk.Button(btn_frame, text="Generate Audio",
+                     command=self.start_audio_generation).pack(side=tk.LEFT, padx=5)
+
             ttk.Button(btn_frame, text="Cancel",
                      command=self.cancel_generation).pack(side=tk.LEFT, padx=5)
 
@@ -403,7 +407,7 @@ class VideoConverterApp:
             self.srt_label.grid(row=7, column=1, padx=5)
 
             #self.num_input.delete(0, tk.END)
-            #self.num_input.insert(0, "500")
+            #self.num_input.insert(0, "100")
             
             # Reset color labels
             self.text_color_label.config(bg="#FFFFFF", fg="black")
@@ -700,113 +704,94 @@ class VideoConverterApp:
 
             try:
                 self.running = True
-                threading.Thread(
-                    target=self.run_full_processing,
-                    daemon=True
-                ).start()
+                self.prompt_for_output_and_generate()
             except Exception as e:
                 messagebox.showerror("Error", str(e))
                 self.running = False
 
-    def run_full_processing(self):
-        try:
-            # Step 1: Adjust SRT timing
-            self.update_status("Adjusting SRT timings...", 0)
-            self.run_external_script(int(self.user_value_var.get()))
-            
-            # Step 2: Generate audio from subtitles
-            self.update_status("Generating audio...", 25)
-            self.generate_audio()  # This must complete before proceeding
-            
-            # Step 3: Get output path after audio generation completes
-            output_path = self.prompt_for_output_path()
-            if not output_path:
-                return
-                
-            # Step 4: Start video generation with confirmed path
-            self.root.after(0, self.start_video_generation, output_path)
-            
-        except Exception as e:
-            self.root.after(0, messagebox.showerror, "Processing Error", str(e))
+    def prompt_for_output_and_generate(self):
+        """Main thread: Get output path and start video generation"""
+        output_path = filedialog.asksaveasfilename(
+            defaultextension=".mp4",
+            filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")]
+        )
+        
+        if output_path:
+            threading.Thread(
+                target=self.generate_video,
+                args=(output_path, self.srt_path,),
+                daemon=True
+            ).start()
+        else:
             self.running = False
 
-    def prompt_for_output_path(self) -> Optional[str]:
-        """Get output path from user in main thread"""
-        if not self.root.winfo_exists():
-            return None
-        
-        output_path = []
-        # Use a semaphore to wait for main thread response
-        lock = threading.Event()
-        
-        def get_path():
-            path = filedialog.asksaveasfilename(
-                defaultextension=".mp4",
-                filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")]
-            )
-            output_path.append(path)
-            lock.set()
-        
-        self.root.after(0, get_path)
-        lock.wait()  # Wait for user response
-        
-        return output_path[0] if output_path else None
-    
-    def start_video_generation(self, output_path: str):
-        """Start video processing with confirmed path"""
-        threading.Thread(
-            target=self.generate_video,
-            args=(output_path,),
-            daemon=True
-        ).start()
-
-    def generate_audio(self):
-        """Generate audio using selected model and settings"""
-        if not self.current_tts:
-            messagebox.showerror("Error", "No TTS model initialized!")
+    def start_audio_generation(self):
+        """Start audio generation only"""
+        if not self.srt_path:
+            messagebox.showerror("Error", "Please select an SRT file first")
             return
-            
+
         try:
-            output_path = os.path.join(self.temp_manager.root_dir, "generated_audio.wav")
+            self.running = True
+            threading.Thread(
+                target=self.generate_audio_only,
+                daemon=True
+            ).start()
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self.running = False
+
+    def generate_audio_only(self):
+        """Generate audio only"""
+        try:
+            self.update_status("Generating audio...", 0)
+            output_path = filedialog.asksaveasfilename(
+                defaultextension=".wav",
+                filetypes=[("WAV files", "*.wav"), ("All files", "*.*")]
+            )
+            if output_path:
+                self.generate_audio(output_path)
+                self.update_status("Audio generated successfully!", 100)
+                messagebox.showinfo("Success", f"Audio saved at:\n{output_path}")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+        finally:
+            self.running = False
+
+
+    def generate_audio(self, output_path):
+        """Generate audio (ensure this is properly synchronous)"""
+        if not self.current_tts:
+            raise RuntimeError("No TTS model initialized")
+
+        #output_path = os.path.join(self.temp_manager.root_dir, output_path)
+        
+        # Clear previous audio path
+        #self.generated_audio_path = None
+        
+        try:
+            # Perform actual audio generation
             self.current_tts.convert_to_audio(
                 sub_data=self.current_tts.subtitle(self.srt_path),
                 language=self.lang_combo.get(),
                 speaker_wav=self.speaker_ref_path,
                 output_path=output_path
             )
+            
+            # Verify generation succeeded
+            if not os.path.exists(output_path):
+                raise RuntimeError("TTS failed to generate audio file")
+                
+            # Update path only after successful generation
             self.generated_audio_path = output_path
             self.settings['background_music'] = output_path
-
+            self.root.after(0, messagebox.showinfo, "Audio Generation complete", str(output_path))
         except Exception as e:
             logging.error(f"Audio generation failed: {str(e)}")
-            raise RuntimeError(f"TTS Error: {str(e)}")
+            self.root.after(0, messagebox.showerror, "Audio Generation Error", str(e))
+            raise
 
-    def verify_temp_files(image_dicts: List[Dict]):
-        """Emergency file system verification"""
-        existing = 0
-        missing = 0
-        invalid = 0
-
-        for img in image_dicts[:100]:  # Check first 100 files
-            path = img.get('path', '')
-            if not os.path.exists(path):
-                missing += 1
-                continue
-            try:
-                with Image.open(path) as im:
-                    im.verify()
-                existing +=1
-            except:
-                invalid +=1
-
-        logging.critical(
-            f"File System Check:\n"
-            f"Existing: {existing}\n"
-            f"Missing: {missing}\n"
-            f"Corrupted: {invalid}"
-        )
-
-    def generate_video(self, output_path: str) -> None:
+    def generate_video(self, output_path: str, srt_path: str) -> None:
         """Process subtitle entries into a video with audio"""
         segments = []
         try:
@@ -815,22 +800,23 @@ class VideoConverterApp:
 
             #if not os.path.exists(self.generated_audio_path):
             #    raise FileNotFoundError("XTTS generated audio not found")
-                
+            audio_input = None    
             # Existing video generation code
             final_video = self.video_processor.combine_segments(
                 segments,
                 output_path,
-                self.generated_audio_path  # Use XTTS generated audio
+                audio_input
             )
 
-            if not self.temp_manager.verify_file("temp.srt"):
+            if not self.temp_manager.verify_file(srt_path):
                 raise FileNotFoundError("Adjusted SRT file not found or empty")
 
-            adjusted_srt = os.path.join(self.temp_manager.root_dir, "temp.srt")
+            adjusted_srt = srt_path
 
             # 2. Parse subtitle entries with time validation
             self.update_status("Parsing subtitles...", 5)
-            entries = self.srt_parser.parse("video_gen_temp/temp.srt")
+            #entries = self.srt_parser.parse("video_gen_temp/temp.srt")
+            entries = self.srt_parser.parse(srt_path)
             if not entries:
                 raise ValueError("No valid subtitle entries found in adjusted SRT file")
 
@@ -885,7 +871,7 @@ class VideoConverterApp:
             final_video = self.video_processor.combine_segments(
                 segments,
                 output_path,
-                self.settings.get('background_music')
+                audio_input
             )
 
             # 8. Cleanup and completion
@@ -947,20 +933,6 @@ class VideoConverterApp:
         results['success'] = len(results['errors']) == 0
         return results
 
-    def _process_images_to_video(self, images: List[Dict], output_path: str) -> bool:
-        """Core video processing with validation"""
-        try:
-            # Validate images before processing
-            if not all(isinstance(img, dict) for img in images):
-                invalid = [img for img in images if not isinstance(img, dict)]
-                logging.error(f"Found {len(invalid)} invalid image entries")
-                return False
-
-            return self.video_processor.process(images, output_path)
-        except Exception as e:
-            logging.error(f"Video processing error: {str(e)}")
-            return False
-
     def safe_cleanup(self, segments):
         """Clean temporary files with validation"""
         try:
@@ -1010,32 +982,18 @@ class VideoConverterApp:
             if not os.path.exists(adjusted_srt):
                 raise RuntimeError("SRT adjustment failed to create output file")
 
-            self.root.after(0, self.prompt_for_output_and_generate)
+            #self.root.after(0, self.prompt_for_output_and_generate)
 
         except subprocess.CalledProcessError as e:
             error_msg = f"SRT adjustment failed:\n{e.stderr}"
             logging.error(f"STDOUT: {e.stdout}\nSTDERR: {e.stderr}")
+            self.root.after(0, messagebox.showerror, "SRT Error", error_msg)
 
         except Exception as e:
             error_msg = f"SRT adjustment error: {str(e)}"
             logging.error(error_msg, exc_info=True)
 
         finally:
-            self.running = False
-
-    def prompt_for_output_and_generate(self):
-        """Main thread: Get output path and start processing"""
-        output_path = filedialog.asksaveasfilename(
-            defaultextension=".mp4",
-            filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")]
-        )
-        if output_path:
-            threading.Thread(
-                target=self.generate_video,
-                args=(output_path,),
-                daemon=True
-            ).start()
-        else:
             self.running = False
 
     def update_status(self, message: str, progress: int):
