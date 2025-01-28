@@ -51,7 +51,7 @@ class VideoProcessor:
         try:
             # Remove failed batches
             valid = [s for s in segments if s is not None]
-            
+        
             # Sort by batch index from filename
             valid.sort(key=lambda x: int(os.path.basename(x).split('_')[1].split('.')[0]))
             return valid
@@ -60,7 +60,6 @@ class VideoProcessor:
             return []
 
     def process_batch(self, batch: List[Dict], batch_idx: int) -> Optional[str]:
-        """Process a batch of images into a video segment."""
         process_dir = None
         list_file = None
         try:
@@ -134,9 +133,7 @@ class VideoProcessor:
                     logging.warning(f"Error cleaning up list file: {str(e)}")
 
 
-
     def combine_segments(self, segments: List[str], output_path: str, audio_input: str) -> bool:
-        """Combine video segments with background music handling and explicit stream mapping."""
         concat_list = None
         try:
             segments = self._get_ordered_segments(segments)
@@ -156,13 +153,7 @@ class VideoProcessor:
             video_input = ffmpeg.input(concat_list, format='concat', safe=0)
             
             # Handle background music
-            #bg_music = self.settings.get('background_music')
-            #if bg_music and os.path.exists(bg_music):
             if audio_input:
-                #if not self.is_valid_audio(bg_music):
-                #    logging.error("Background music is not a valid audio file")
-                #    return False
-                #print('audio_input = True')
                 audio_input = ffmpeg.input(audio_input)
                 (
                     ffmpeg
@@ -184,7 +175,6 @@ class VideoProcessor:
                 # If no background music, check if segments have audio
                 has_audio = any(self.has_audio_stream(seg) for seg in valid_segments)
                 if has_audio:
-                    #print("has audio True")
                     # Copy both video and audio from segments
                     (
                         ffmpeg
@@ -193,7 +183,6 @@ class VideoProcessor:
                         .run()
                     )
                 else:
-                    #print("No audio")
                     # No audio in segments and no background music
                     (
                         ffmpeg

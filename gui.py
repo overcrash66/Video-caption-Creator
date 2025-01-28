@@ -716,6 +716,13 @@ class VideoConverterApp:
             filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")]
         )
         
+        delay = self.num_input.get()
+        #print(delay)
+        #add here logic for temp.srt
+        adjusted_srt = self.run_external_script(delay)
+        #print(adjusted_srt)
+        self.srt_path = adjusted_srt
+
         if output_path:
             threading.Thread(
                 target=self.generate_video,
@@ -785,42 +792,26 @@ class VideoConverterApp:
             # Update path only after successful generation
             self.generated_audio_path = output_path
             self.settings['background_music'] = output_path
-            self.root.after(0, messagebox.showinfo, "Audio Generation complete", str(output_path))
+            #self.root.after(0, messagebox.showinfo, "Audio Generation complete", str(output_path))
         except Exception as e:
             logging.error(f"Audio generation failed: {str(e)}")
             self.root.after(0, messagebox.showerror, "Audio Generation Error", str(e))
             raise
 
     def generate_video(self, output_path: str, srt_path: str) -> None:
-        """Process subtitle entries into a video with audio"""
+        audio_input = None
         segments = []
         try:
             self.update_settings()
             self.update_status("Initializing video generation...", 0)
 
-            #if not os.path.exists(self.generated_audio_path):
-            #    raise FileNotFoundError("XTTS generated audio not found")
-            audio_input = None    
-            # Existing video generation code
-            final_video = self.video_processor.combine_segments(
-                segments,
-                output_path,
-                audio_input
-            )
-
-            if not self.temp_manager.verify_file(srt_path):
-                raise FileNotFoundError("Adjusted SRT file not found or empty")
-
-            adjusted_srt = srt_path
-
-            # 2. Parse subtitle entries with time validation
+            # Parse subtitle entries with time validation
             self.update_status("Parsing subtitles...", 5)
-            #entries = self.srt_parser.parse("video_gen_temp/temp.srt")
             entries = self.srt_parser.parse(srt_path)
             if not entries:
                 raise ValueError("No valid subtitle entries found in adjusted SRT file")
 
-            # 3. Generate subtitle images with quality checks
+            # Generate subtitle images with quality checks
             self.update_status("Generating subtitle images...", 20)
             images = self.image_generator.generate_images(entries)
 
@@ -829,12 +820,7 @@ class VideoConverterApp:
                     f"Image generation mismatch: {len(entries)} entries vs {len(images)} images"
                 )
 
-            # 4. Validate sample images
-            sample_check = self.validate_images([img['path'] for img in images[:3]])
-            if not sample_check["success"]:
-                raise RuntimeError(f"Image validation failed: {sample_check['errors'][0]}")
-
-            # 5. Process in batches with progress tracking
+            # Process in batches with progress tracking
             self.update_status("Processing video batches...", 30)
             batch_size = self.settings.get('batch_size', 50)
             image_paths = [img['path'] for img in images]
@@ -863,7 +849,7 @@ class VideoConverterApp:
                         logging.error(f"Batch processing failed: {str(e)}")
                         self._save_batch_debug_info(batches[future_to_batch[future]], future_to_batch[future])
 
-            # 6. Combine video segments
+            # Combine video segments
             if not segments:
                 raise RuntimeError("No valid video segments created")
 
@@ -874,11 +860,10 @@ class VideoConverterApp:
                 audio_input
             )
 
-            # 8. Cleanup and completion
+            # Cleanup and completion
             self.safe_cleanup(segments)
             self.update_status("Video creation complete!", 100)
             messagebox.showinfo("Success", f"Video saved to:\n{output_path}")
-
         except Exception as e:
             error_msg = f"Video generation failed: {str(e)}"
             logging.error(error_msg, exc_info=True)
@@ -982,17 +967,17 @@ class VideoConverterApp:
             if not os.path.exists(adjusted_srt):
                 raise RuntimeError("SRT adjustment failed to create output file")
 
-            #self.root.after(0, self.prompt_for_output_and_generate)
+            # Use the adjusted SRT file for video generation
+            #self.srt_path = adjusted_srt
+            return adjusted_srt
 
         except subprocess.CalledProcessError as e:
             error_msg = f"SRT adjustment failed:\n{e.stderr}"
             logging.error(f"STDOUT: {e.stdout}\nSTDERR: {e.stderr}")
             self.root.after(0, messagebox.showerror, "SRT Error", error_msg)
-
         except Exception as e:
             error_msg = f"SRT adjustment error: {str(e)}"
             logging.error(error_msg, exc_info=True)
-
         finally:
             self.running = False
 
