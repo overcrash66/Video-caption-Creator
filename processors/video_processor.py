@@ -2,16 +2,27 @@ from PIL import Image
 import ffmpeg
 import os
 import logging
-from concurrent.futures import ThreadPoolExecutor
+import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Optional
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class VideoProcessor:
     def __init__(self, temp_manager, settings: dict):
         self.temp_manager = temp_manager
         self.settings = settings.copy()
+        self.process_dir = self.temp_manager.process_dir
 
-    def process(self, images: List[Dict], output_path: str) -> bool:
-        """Process images with strict order preservation"""
+    def __del__(self):
+        if hasattr(self, 'temp_dir') and self.temp_dir:
+            try:
+                self.temp_dir.cleanup()
+            except Exception as e:
+                logging.error(f"Error cleaning up temporary directory: {str(e)}")
+
+    def process_images(self, images, output_path):
         try:
             batch_size = max(len(images) // 10, 50)
             batches = [images[i:i+batch_size] for i in range(0, len(images), batch_size)]
@@ -42,6 +53,7 @@ class VideoProcessor:
                 return False
 
             return self.combine_segments(valid_segments, output_path)
+        
         except Exception as e:
             logging.error(f"Video processing failed: {str(e)}")
             return False
@@ -59,10 +71,18 @@ class VideoProcessor:
             logging.error(f"Segment ordering failed: {str(e)}")
             return []
 
-    def process_batch(self, batch: List[Dict], batch_idx: int) -> Optional[str]:
+    def process(self, images: List[Dict], output_path: str) -> bool:
+        """Process a list of images into a video."""
+        return self.process_images(images, output_path)
+
+    def process_batch(self, batch: List[Dict], batch_idx: int) -> Optional[str]:  
         process_dir = None
         list_file = None
         try:
+            if not batch:
+                logging.warning(f"Skipping empty batch {batch_idx}")
+                return None
+
             # Add validation for image properties
             first_image = Image.open(batch[0]['path'])
             if first_image.size != (1280, 720):
@@ -71,9 +91,6 @@ class VideoProcessor:
             if first_image.mode != 'RGB':
                 logging.error("Invalid color mode in images")
                 return None
-            if not batch:
-                logging.warning(f"Skipping empty batch {batch_idx}")
-                return None  
 
             process_dir = self.temp_manager.create_process_dir()
             list_file = os.path.join(process_dir, f"input_{batch_idx}.txt")
@@ -82,15 +99,14 @@ class VideoProcessor:
 
             with open(list_file, 'w', encoding='utf-8') as f:
                 for img in batch:
-                    logging.info(f"Processing batch {batch_idx} with {len(batch)} images")
                     img_path = img.get('path')
                     duration = img.get('duration', 1.0)
                 
                     if not img_path or not os.path.exists(img_path):
                         logging.error(f"Invalid image in batch {batch_idx}: {img_path}")
                         continue
-                    else:
-                        logging.debug(f"Valid image: {img['path']}")  
+                    #else:
+                    #    logging.debug(f"Valid image: {img['path']}")  
 
                     f.write(f"file '{os.path.abspath(img_path)}'\n")
                     f.write(f"duration {duration:.3f}\n")
@@ -113,14 +129,9 @@ class VideoProcessor:
                 .overwrite_output()
                 .run(quiet=True)
             )
-
-            if not self.is_valid_video(output_file):
-                logging.error(f"Batch {batch_idx} output failed validation")
-                return None
-
-            return output_file
-        except ffmpeg.Error as e:
-            logging.error(f"FFmpeg error in batch {batch_idx}: {e.stderr.decode()}")
+            return output_file if self.is_valid_video(output_file) else None
+        except Exception as e:
+            logging.error(f"FFmpeg error in batch {batch_idx}: {str(e)}")
             return None
         except Exception as e:
             logging.error(f"Unexpected error in batch {batch_idx}: {str(e)}")
@@ -132,9 +143,7 @@ class VideoProcessor:
                 except Exception as e:
                     logging.warning(f"Error cleaning up list file: {str(e)}")
 
-
-
-    def combine_segments(self, segments: List[str], output_path: str, audio_input: str) -> bool:
+    def combine_segments(self, segments: List[str], output_path: str, audio_input: str = None) -> bool:
         """Combine video segments with background music handling and explicit stream mapping."""
         concat_list = None
         try:
@@ -158,26 +167,24 @@ class VideoProcessor:
             #bg_music = self.settings.get('background_music')
             #if bg_music and os.path.exists(bg_music):
             if audio_input:
-                #if not self.is_valid_audio(bg_music):
-                #    logging.error("Background music is not a valid audio file")
-                #    return False
-                #print('audio_input = True')
-                audio_input = ffmpeg.input(audio_input)
+                if not self.is_valid_audio(audio_input):
+                    logging.error("Audio input is not a valid audio file")
+                    return False
+                audio_stream = ffmpeg.input(audio_input)
                 (
                     ffmpeg
                     .output(
                         video_input,
-                        audio_input,
+                        audio_stream,
                         output_path,
-                        vcodec='libx264',
-                        pix_fmt='yuv420p',
+                        vcodec='copy',
                         acodec='aac',
                         audio_bitrate='192k',
                         strict='experimental',
                         movflags='+faststart'
                     )
                     .overwrite_output()
-                    .run(capture_stdout=True, capture_stderr=True)
+                    .run(quiet=True)
                 )
             else:
                 # If no background music, check if segments have audio
@@ -212,24 +219,22 @@ class VideoProcessor:
                 except Exception as e:
                     logging.warning(f"Error cleaning up concat list: {str(e)}")
 
-    def is_valid_video(self, file_path: str) -> bool:
-        """Check if file contains a valid video stream."""
-        try:
-            probe = ffmpeg.probe(file_path)
-            return any(stream['codec_type'] == 'video' for stream in probe.get('streams', []))
-        except Exception as e:
-            logging.error(f"Invalid video {file_path}: {str(e)}")
+    def is_valid_audio(self, file_path: str) -> bool:
+            try:
+                probe = ffmpeg.probe(file_path)
+                return any(stream['codec_type'] == 'audio' for stream in probe['streams'])
+            except Exception as e:
+                logger.error(f"Invalid audio file: {str(e)}")
+                return False
             return False
 
-    def is_valid_audio(self, file_path: str) -> bool:
+    def is_valid_video(self, file_path: str) -> bool:
+        """Check if file is a valid video."""
         try:
-            probe = ffmpeg.probe(path)
-            return any(stream['codec_type'] == 'audio' for stream in probe['streams'])
-        except ffmpeg.Error as e:
-            logger.error(f"Invalid audio file: {e.stderr.decode()}")
-            return False
+            probe = ffmpeg.probe(file_path)
+            return any(stream['codec_type'] == 'video' for stream in probe['streams'])
         except Exception as e:
-            logger.error(f"Validation error: {str(e)}")
+            logger.error(f"Invalid video file: {str(e)}")
             return False
 
     def has_audio_stream(self, file_path: str) -> bool:

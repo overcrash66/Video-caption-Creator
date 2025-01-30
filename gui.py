@@ -14,7 +14,9 @@ import json
 import subprocess
 from typing import List, Dict, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
-
+import ffmpeg
+import srt
+import re
 class VideoConverterApp:
     def __init__(self, root):
         self.root = root
@@ -473,38 +475,43 @@ class VideoConverterApp:
                 return
 
             try:
-                delay = int(self.user_value_var.get())
                 self.running = True
                 threading.Thread(
-                    target=self.run_external_script,
-                    args=(delay,),
+                    target=self.prompt_for_output_and_generate,
                     daemon=True
                 ).start()
             except ValueError:
                 messagebox.showerror("Invalid Input", "Please enter a valid integer")
                 self.running = False
 
-    def generate_video(self, output_path: str) -> None:
+    def generate_video(self, output_path: str, srt_path: str) -> None:
         """Process subtitle entries into a video with audio"""
         try:
             self.update_settings()
             self.update_status("Initializing video generation...", 0)
 
-            if not self.temp_manager.verify_file("temp.srt"):
+            adjusted_srt = srt_path
+            if not self.temp_manager.verify_file(adjusted_srt):
                 raise FileNotFoundError("Adjusted SRT file not found or empty")
-
-            adjusted_srt = os.path.join(self.temp_manager.root_dir, "temp.srt")
 
             # 2. Parse subtitle entries with time validation
             self.update_status("Parsing subtitles...", 5)
-            entries = self.srt_parser.parse("video_gen_temp/temp.srt")
+            
+            entries = self.srt_parser.parse(adjusted_srt)
+            
             if not entries:
                 raise ValueError("No valid subtitle entries found in adjusted SRT file")
+            
+            # Validate entries for missing 'start_time' or 'end_time'
+            for i, entry in enumerate(entries):
+                if 'start_time' not in entry or 'end_time' not in entry:
+                    raise ValueError(f"Entry {i + 1} is missing 'start_time' or 'end_time'")
 
             # 3. Generate subtitle images with quality checks
             self.update_status("Generating subtitle images...", 20)
             images = self.image_generator.generate_images(entries)
 
+            
             if len(images) != len(entries):
                 raise RuntimeError(
                     f"Image generation mismatch: {len(entries)} entries vs {len(images)} images"
@@ -554,9 +561,10 @@ class VideoConverterApp:
                 output_path,
                 self.settings.get('background_music')
             )
-
+            
             # 8. Cleanup and completion
             self.safe_cleanup(segments)
+            
             self.update_status("Video creation complete!", 100)
             messagebox.showinfo("Success", f"Video saved to:\n{output_path}")
 
@@ -663,8 +671,9 @@ class VideoConverterApp:
             if not os.path.exists(adjusted_srt):
                 raise RuntimeError("SRT adjustment failed to create output file")
 
-            self.root.after(0, self.prompt_for_output_and_generate)
-
+            #self.root.after(0, self.prompt_for_output_and_generate)
+            return adjusted_srt
+        
         except subprocess.CalledProcessError as e:
             error_msg = f"SRT adjustment failed:\n{e.stderr}"
             logging.error(f"STDOUT: {e.stdout}\nSTDERR: {e.stderr}")
@@ -682,10 +691,16 @@ class VideoConverterApp:
             defaultextension=".mp4",
             filetypes=[("MP4 files", "*.mp4"), ("All files", "*.*")]
         )
+
+        #delay = int(self.user_value_var.get())
+        delay = int(self.num_input.get())
+        adjusted_srt = self.run_external_script(delay)
+        #self.srt_path = adjusted_srt
+
         if output_path:
             threading.Thread(
                 target=self.generate_video,
-                args=(output_path,),
+                args=(output_path, adjusted_srt,),
                 daemon=True
             ).start()
         else:

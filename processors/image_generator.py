@@ -16,6 +16,16 @@ class ImageGenerator:
         generated = [None] * len(entries)  # Pre-allocate to maintain positions
     
         for idx, entry in enumerate(entries):
+            logging.debug(f"Processing entry {idx}: {entry}")
+
+            if not isinstance(entry, dict):
+                logging.error(f"Entry {idx} is not a dictionary: {entry}")
+                continue
+
+            if 'start_time' not in entry or 'end_time' not in entry:
+                logging.error(f"Entry {idx} is missing 'start_time' or 'end_time': {entry}")
+                continue
+
             try:
                 if self._has_style_tags(entry['text']):
                     img_info = self.generate_styled_image(entry, idx)
@@ -27,7 +37,7 @@ class ImageGenerator:
             except Exception as e:
                 logging.error(f"Image generation failed for entry {idx}: {str(e)}")
     
-        return [img for img in generated if img is not None]  # Filter out failures
+        return [img for img in generated if img is not None]  # Filter out None values
 
     def generate_preview(self, text: str) -> Image.Image:
         img = self.create_base_image()
@@ -83,9 +93,14 @@ class ImageGenerator:
             path = os.path.join(self.temp_manager.image_dir, f"frame_{idx:08d}.png")
             self._save_image(img, path)
             
+            if 'end_time' in entry and 'start_time' in entry:
+                duration = entry['end_time'] - entry['start_time']
+            else:
+                duration = self.settings.get('default_duration', 5)  # Default duration if not provided
+                
             return {
                 'path': path,
-                'duration': entry['duration'] / self.settings.get('speed_factor', 1.0)
+                'duration': duration
             }
         except Exception as e:
             logging.error(f"Simple image failed: {str(e)}")
