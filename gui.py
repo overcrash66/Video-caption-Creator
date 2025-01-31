@@ -14,21 +14,25 @@ import json
 import subprocess
 from typing import List, Dict, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
-import ffmpeg
-import srt
-import re
+
 class VideoConverterApp:
     def __init__(self, root):
-        self.root = root
-        self.root.title("Video Caption Creator")
-        self.root.geometry("1000x750")
-        self.preview_window = None
+        try:
+            self.root = root
+            self.root.title("Video Caption Creator")
+            self.root.geometry("1000x750")
+            self.preview_window = None
 
-        # Initialize app components in correct order
-        self.initialize_app()  # 1. Variables and core components
-        self.setup_styles()    # 2. UI styling
-        self.create_widgets()  # 3. Create GUI elements
-        self.setup_logging()   # 4. Configure logging
+            # Initialize app components in correct order
+            self.setup_logging()   # 1. Configure logging first for better error tracking
+            self.initialize_app()  # 2. Variables and core components
+            self.setup_styles()    # 3. UI styling
+            self.create_widgets()  # 4. Create GUI elements
+            
+        except Exception as e:
+            logging.critical(f"Failed to initialize application: {str(e)}")
+            messagebox.showerror("Initialization Error", "Failed to start application. Check logs for details.")
+            raise
 
     def get_current_settings(self) -> dict:
         """Safely get current settings with null checks"""

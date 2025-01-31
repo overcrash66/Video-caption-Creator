@@ -6,11 +6,32 @@ from typing import Dict, List, Optional
 from utils.style_parser import StyleParser
 
 class ImageGenerator:
-    def __init__(self, temp_manager, style_parser: StyleParser, settings: dict):
+    """Handles the generation of caption images with various styles and effects."""
+    
+    def __init__(self, temp_manager: any, style_parser: StyleParser, settings: dict) -> None:
+        if not temp_manager or not style_parser or not settings:
+            raise ValueError("Required parameters cannot be None")
+        if not hasattr(temp_manager, 'image_dir'):
+            raise AttributeError("temp_manager must have image_dir attribute")
+
         self.temp_manager = temp_manager
         self.style_parser = style_parser
         self.settings = settings.copy()
+
+        if 'frame_delay' not in self.settings:
+            self.settings['frame_delay'] = 1.0
         self.font_cache = {}
+        
+        # Ensure required settings have defaults
+        if 'font_size' not in self.settings:
+            self.settings['font_size'] = 24
+        if 'margin' not in self.settings:
+            self.settings['margin'] = 20
+
+    def _adjust_duration(self, base_duration: float) -> float:
+        """Apply frame delay and other timing adjustments"""
+        adjusted = base_duration + self.settings.get('frame_delay', 0.0)
+        return adjusted / self.settings.get('speed_factor', 1.0)
 
     def generate_images(self, entries: List[Dict]) -> List[Dict]:
         generated = [None] * len(entries)  # Pre-allocate to maintain positions
@@ -61,7 +82,8 @@ class ImageGenerator:
                 
             draw.text((20, y), part['text'], font=font, 
                      fill=self.settings.get('text_color', '#FFFFFF'))
-            y += font.getbbox(part['text'])[3] + 5
+            bbox = font.getbbox(part['text'])
+            y += (bbox[3] if bbox else font.size) + 5
             
         return img
 
@@ -87,20 +109,18 @@ class ImageGenerator:
                     self.draw_text_border(draw, line, (x, y), font)
                     
                 draw.text((x, y), line, font=font, 
-                         fill=self.settings.get('text_color', '#FFFFFF'))
+                        fill=self.settings.get('text_color', '#FFFFFF'))
                 y += bbox[3]
                 
             path = os.path.join(self.temp_manager.image_dir, f"frame_{idx:08d}.png")
             self._save_image(img, path)
             
-            if 'end_time' in entry and 'start_time' in entry:
-                duration = entry['end_time'] - entry['start_time']
-            else:
-                duration = self.settings.get('default_duration', 5)  # Default duration if not provided
-                
+            # Use the duration from the subtitle entry with millisecond precision
+            duration = float(entry['end_time'] - entry['start_time'])
+            adjusted_duration = self._adjust_duration(duration)
             return {
                 'path': path,
-                'duration': duration
+                'duration': round(adjusted_duration, 3)  # Round to 3 decimal places for milliseconds
             }
         except Exception as e:
             logging.error(f"Simple image failed: {str(e)}")
@@ -131,9 +151,11 @@ class ImageGenerator:
             path = os.path.join(self.temp_manager.image_dir, f"frame_{idx:08d}.png")
             self._save_image(img, path)
             
+            duration = float(entry['end_time'] - entry['start_time'])
+            adjusted_duration = duration / self.settings.get('speed_factor', 1.0)
             return {
                 'path': path,
-                'duration': entry['duration'] / self.settings.get('speed_factor', 1.0)
+                'duration': round(adjusted_duration, 3)
             }
         except Exception as e:
             logging.error(f"Styled image failed: {str(e)}")
@@ -230,11 +252,15 @@ class ImageGenerator:
 
     def draw_text_border(self, draw, text: str, position: tuple, font: ImageFont.FreeTypeFont):
         x, y = position
+        # First draw the border in black
         for dx in [-2, -1, 0, 1, 2]:
             for dy in [-2, -1, 0, 1, 2]:
                 if dx == 0 and dy == 0:
                     continue
                 draw.text((x+dx, y+dy), text, font=font, fill=(0, 0, 0))
+        
+        # Then draw the main text in white
+        draw.text((x, y), text, font=font, fill=(255, 255, 255))
 
     def draw_text_shadow(self, draw, text: str, position: tuple, font: ImageFont.FreeTypeFont):
         x, y = position
@@ -242,7 +268,8 @@ class ImageGenerator:
             draw.text((x+2+i, y+2+i), text, font=font, fill=(0, 0, 0, 128))
 
     def _has_style_tags(self, text: str) -> bool:
-        return any(tag in text for tag in ['<b>', '<i>', '<font'])
+        style_tags = ['<b>', '</b>', '<i>', '</i>', '<font']
+        return any(tag in text.lower() for tag in style_tags)
 
     def draw_text_line(self, draw, text: str, position: tuple, font: ImageFont.FreeTypeFont):
         x, y = position
@@ -266,7 +293,16 @@ class ImageGenerator:
         draw.text((x, y), text, font=font, fill=text_color)   
 
     def _find_system_font(self, face: str, bold: bool, italic: bool) -> str:
-        """Robust system font discovery"""
+        """Robust system font discovery with system path checking"""
+        import sys
+        
+        if sys.platform == 'win32':
+            font_dir = 'C:\\Windows\\Fonts\\'
+        elif sys.platform == 'darwin':
+            font_dir = '/System/Library/Fonts/'
+        else:
+            font_dir = '/usr/share/fonts/'
+            
         font_map = {
             ('Arial', False, False): 'arial.ttf',
             ('Arial', True, False): 'arialbd.ttf',
@@ -275,7 +311,12 @@ class ImageGenerator:
             ('Helvetica', False, False): 'helvetica.ttf',
             ('Times New Roman', False, False): 'times.ttf',
         }
-        return font_map.get(
-            (face, bold, italic), 
-            'arial.ttf'  # Ultimate fallback
-        )     
+        
+        font_file = font_map.get((face, bold, italic), 'arial.ttf')
+        font_path = os.path.join(font_dir, font_file)
+        
+        if os.path.exists(font_path):
+            return font_path
+            
+        # Fallback to default system font
+        return ImageFont.load_default().path

@@ -1,26 +1,23 @@
-import sys, os
+import sys
 import time
-import re
+
+def main(iterations):
+    for i in range(iterations):
+        progress = (i+1) * 100 // iterations
+        print(f"Progress: {progress}%")
+        time.sleep(0.5)  # Simulate work
 
 def timecode_to_ms(tc):
     """Convert timecode to milliseconds."""
     clean_tc = tc.strip().replace('\r', '').replace('\u202f', ' ').replace('\ufeff', '')
-    try:
-        hours, mins, rest = clean_tc.split(':', 2)
-        if ',' in rest:
-            secs, ms = rest.split(',')
-        elif '.' in rest:
-            secs, ms = rest.split('.')
-        else:
-            secs, ms = rest, '000'
-        
-        # Validate time components
-        if not (0 <= int(hours) < 24 and 0 <= int(mins) < 60 and 0 <= int(secs) < 60):
-            raise ValueError("Invalid timecode format: hours, minutes, or seconds out of range")
-        
-        return int(hours)*3600000 + int(mins)*60000 + int(secs)*1000 + int(ms.ljust(3, '0')[:3])
-    except Exception as e:
-        raise ValueError(f"Invalid timecode format: {tc}") from e
+    hours, mins, rest = clean_tc.split(':', 2)
+    if ',' in rest:
+        secs, ms = rest.split(',')
+    elif '.' in rest:
+        secs, ms = rest.split('.')
+    else:
+        secs, ms = rest, '000'
+    return int(hours)*3600000 + int(mins)*60000 + int(secs)*1000 + int(ms.ljust(3, '0')[:3])
 
 def ms_to_timecode(ms):
     """Convert milliseconds to timecode."""
@@ -62,7 +59,7 @@ def process_srt(input_file, delay_ms, output_file):
 
             # Adjust start time and ensure no gap
             if previous_end_time is not None:
-                new_start = max(previous_end_time, orig_start + delay_ms)
+                new_start = previous_end_time  # Start time of this caption is the end time of the previous one
             else:
                 new_start = max(orig_start + delay_ms, 0)
 
@@ -78,64 +75,18 @@ def process_srt(input_file, delay_ms, output_file):
             ]
             processed.append('\n'.join(new_block))
         except Exception as e:
-            print(f"Error processing block: {block}\nError: {e}")
             processed.append(block)
 
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write('\n\n'.join(processed))
-    
-    #temp_file = f"{output_file}.bak"
-    #os.replace(output_file, temp_file)   
-    #clean_srt_file(temp_file, output_file)  
-
-def clean_srt_file(input_path: str, output_path: str) -> None:
-    """
-    Clean an SRT file by removing invalid or empty subtitle entries
-    and fixing formatting issues.
-    """
-    with open(input_path, "r", encoding="utf-8") as file:
-        lines = file.readlines()
-
-    cleaned_lines = []
-    buffer = []
-    for line in lines:
-        line = line.strip()
-        if re.match(r"^\d+$", line):  # Entry number
-            if buffer:  # Check if previous entry is valid
-                cleaned_lines.extend(buffer)
-                buffer = []
-            buffer.append(line)
-        elif re.match(r"^\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}$", line):  # Timestamp
-            if buffer and not re.match(r"^\d+$", buffer[-1]):
-                buffer.pop()  # Remove invalid entry
-            buffer.append(line)
-        elif line:  # Subtitle text
-            buffer.append(line)
-        elif buffer:  # End of an entry
-            cleaned_lines.extend(buffer)
-            buffer = []
-
-    # Add last buffered entry if valid
-    if buffer:
-        cleaned_lines.extend(buffer)
-
-    # Write cleaned lines to the output file
-    with open(output_path, "w", encoding="utf-8") as file:
-        for line in cleaned_lines:
-            file.write(line + "\n")
-
 
 if __name__ == '__main__':
     if len(sys.argv) != 4:
         print("Usage: python editSrtFileTime.py <input.srt> <delay_ms> <output.srt>")
-        print("Example: python editSrtFileTime.py input.srt 500 output.srt")
         sys.exit(1)
     
     try:
         process_srt(sys.argv[1], int(sys.argv[2]), sys.argv[3])
-
-        # Example usage
-        #clean_srt_file("input.srt", "cleaned_output.srt")
     except Exception as e:
-        print(f"Script Error: {str(e)}")
-        sys.exit(1)
+        print("Script Error" + str(e))
+        sys.exit(1)    
