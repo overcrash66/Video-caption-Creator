@@ -1,0 +1,111 @@
+1
+00:00:00,256 --> 00:00:01,024
+Question 1
+
+2
+00:00:01,536 --> 00:00:05,632
+Quand doit-on tenir une élection fédérale selon la législation adoptée par le Parlement
+
+3
+00:00:06,912 --> 00:00:09,216
+A Quand le roi veut remplacer le 1er ministre
+
+4
+00:00:09,728 --> 00:00:13,312
+B dans les 4 ans Suivant la dernière élection
+
+5
+00:00:13,824 --> 00:00:16,896
+C dans les 5 ans suivant la dernière élection
+
+6
+00:00:17,408 --> 00:00:18,432
+D
+
+7
+00:00:18,688 --> 00:00:23,808
+Le 1er ministre peut convoquer l'élection à n'importe quel moment de sa propre volonté
+
+8
+00:00:24,320 --> 00:00:25,344
+La réponse est
+
+9
+00:00:25,856 --> 00:00:28,416
+B dans les 4 ans suivant la dernière élection
+
+10
+00:00:28,928 --> 00:00:29,440
+Question 2
+
+11
+00:00:30,976 --> 00:00:34,816
+Pour lequel des points suivants est le gouvernement fédéral responsable
+
+12
+00:00:36,096 --> 00:00:37,120
+A
+
+13
+00:00:37,632 --> 00:00:39,168
+Ressources naturelles
+
+14
+00:00:40,192 --> 00:00:41,728
+C éducation
+
+15
+00:00:41,984 --> 00:00:43,264
+D commerces
+
+16
+00:00:43,520 --> 00:00:44,800
+Interprovincial
+
+17
+00:00:45,056 --> 00:00:46,336
+Et communication
+
+18
+00:00:47,360 --> 00:00:48,640
+La réponse est d
+
+19
+00:00:49,408 --> 00:00:50,944
+Commerce interprovincial
+
+20
+00:00:51,200 --> 00:00:52,736
+Et communication
+
+21
+00:00:53,248 --> 00:00:53,760
+Question 3
+
+22
+00:00:54,272 --> 00:00:57,600
+Quel était le nom du nouveau pays formé à la Confédération
+
+23
+00:00:58,880 --> 00:00:59,648
+A Canada
+
+24
+00:00:59,904 --> 00:01:00,928
+B Confédération
+
+25
+00:01:01,184 --> 00:01:01,952
+Canadienne
+
+26
+00:01:02,976 --> 00:01:04,256
+C Dominion du Canada
+
+27
+00:01:04,768 --> 00:01:05,792
+La réponse est
+
+28
+00:01:06,048 --> 00:01:08,096
+C Dominion du Canada

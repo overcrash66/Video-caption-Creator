@@ -2,8 +2,10 @@ from PIL import Image, ImageDraw, ImageFont, ImageColor, ImageOps
 import html
 import logging
 import os
-from typing import Dict, List, Optional
+from typing import List, Dict, Optional, Tuple
 from utils.style_parser import StyleParser
+from processors.sub2audio import SubToAudio
+from pydub import AudioSegment
 
 class ImageGenerator:
     """Handles the generation of caption images with various styles and effects."""
@@ -30,8 +32,8 @@ class ImageGenerator:
 
     def _adjust_duration(self, base_duration: float) -> float:
         """Apply frame delay and other timing adjustments"""
-        adjusted = base_duration + self.settings.get('frame_delay', 0.0)
-        return adjusted / self.settings.get('speed_factor', 1.0)
+        adjusted = base_duration + self.settings.get('frame_delay', 0.7)
+        return adjusted / self.settings.get('speed_factor', 2.0)
 
     def generate_images(self, entries: List[Dict]) -> List[Dict]:
         generated = [None] * len(entries)  # Pre-allocate to maintain positions
