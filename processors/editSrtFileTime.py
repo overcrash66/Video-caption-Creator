@@ -88,5 +88,5 @@ if __name__ == '__main__':
     try:
         process_srt(sys.argv[1], int(sys.argv[2]), sys.argv[3])
     except Exception as e:
-        print("Script Error"+ str(e))
+        print("Script Error" + str(e))
         sys.exit(1)    

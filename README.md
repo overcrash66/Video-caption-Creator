@@ -1,6 +1,8 @@
 # Video caption Creator
 
-Video caption Creator is a Python program that uses an audio and an SRT file to generate a videos with captions.
+Video caption Creator: is a Python program that uses an SRT file to generate a videos with captions.
+It support generating speech / audio from SRT files
+It also support merging and sync video with audio 
 
 ### Captivating captions
 
@@ -9,9 +11,9 @@ Video caption Creator is a Python program that uses an audio and an SRT file to 
 
 Overall the following options are available when it comes to styling the captions:
 
-- Choose the caption font size
-- Choose the caption font color
-- Choose the caption font family
+- Choose the caption font; custom font, style, size, color ..
+
+[![VcC](https://img.youtube.com/vi/rjFq3P9vhHs/0.jpg)](https://www.youtube.com/watch?v=rjFq3P9vhHs)
 
 ### Installation
 
@@ -32,6 +34,13 @@ venv\Scripts\activate
 ```
 
 * Install Python dependencies: `pip install -r requirements.txt`
+
+If you like to use torch with cuda:
+
+```
+pip uninstall torch torchaudio
+pip install torch==2.5.1+cu118 torchaudio==2.5.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+```
 
 ### GUI usage
 
