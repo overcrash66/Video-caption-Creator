@@ -22,6 +22,7 @@ class ImageGenerator:
 
         if 'frame_delay' not in self.settings:
             self.settings['frame_delay'] = 1.0
+        # font_cache keyed by (face, size, bold, italic)
         self.font_cache = {}
         
         # Ensure required settings have defaults
@@ -85,7 +86,7 @@ class ImageGenerator:
             draw.text((20, y), part['text'], font=font, 
                      fill=self.settings.get('text_color', '#FFFFFF'))
             bbox = font.getbbox(part['text'])
-            y += (bbox[3] if bbox else font.size) + 5
+            y += (bbox[3] - bbox[1] if bbox else font.size) + 5
             
         return img
 
@@ -100,19 +101,20 @@ class ImageGenerator:
             font = self.get_font('Arial', font_size, False, False)
             wrapped = self.wrap_text(text, font, 1280 - (2 * margin))
             
-            total_height = sum(font.getbbox(line)[3] for line in wrapped)
+            total_height = sum((font.getbbox(line)[3] - font.getbbox(line)[1]) for line in wrapped)
             y = max(margin, (720 - total_height) // 2)
             
             for line in wrapped:
                 bbox = font.getbbox(line)
-                x = max(margin, (1280 - bbox[2]) // 2)
+                text_width = bbox[2] - bbox[0]
+                x = max(margin, (1280 - text_width) // 2)
                 
                 if self.settings.get('text_border', True):
                     self.draw_text_border(draw, line, (x, y), font)
                     
                 draw.text((x, y), line, font=font, 
                         fill=self.settings.get('text_color', '#FFFFFF'))
-                y += bbox[3]
+                y += (bbox[3] - bbox[1])
                 
             path = os.path.join(self.temp_manager.image_dir, f"frame_{idx:08d}.png")
             self._save_image(img, path)
@@ -129,12 +131,33 @@ class ImageGenerator:
             return None
 
     def generate_styled_image(self, entry: Dict, idx: int) -> Optional[Dict]:
+        if not entry or 'text' not in entry:
+            logging.error("Invalid entry data")
+            return None
+            
         try:
+            logging.debug(f"Generating styled image for entry {idx}")
             img = self.create_base_image()
-            draw = ImageDraw.Draw(img)
             styled = self.style_parser.parse(entry['text'])
             
-            y = self.settings.get('margin', 20)
+            # Calculate total height of all text parts
+            total_height = 0
+            for part in styled['parts']:
+                font = self.get_font(
+                    part['style'].get('face', 'Arial'),
+                    part['style'].get('size', self.settings['font_size']),
+                    part['style'].get('bold', False),
+                    part['style'].get('italic', False)
+                )
+                bbox = font.getbbox(part['text'])
+                if bbox:
+                    total_height += (bbox[3] - bbox[1]) + 5  # Height + spacing
+
+            # Calculate starting Y position to center all text vertically
+            y = (720 - total_height) // 2
+            draw = ImageDraw.Draw(img)
+            
+            # Iterate through text parts and draw them
             for part in styled['parts']:
                 font = self.get_font(
                     part['style'].get('face', 'Arial'),
@@ -143,22 +166,30 @@ class ImageGenerator:
                     part['style'].get('italic', False)
                 )
                 
-                x = self.settings.get('margin', 20)
-                if part['style'].get('align') == 'center':
-                    x = (1280 - font.getlength(part['text'])) // 2
+                # Calculate x-position to center text horizontally using getbbox
+                bbox = font.getbbox(part['text'])
+                text_width = bbox[2] - bbox[0]
+                x = (1280 - text_width) // 2
 
+                # Draw text (with optional border and shadow)
                 self.draw_text_line(draw, part['text'], (x, y), font)
-                y += font.getbbox(part['text'])[3] + 5
+                
+                # Update y-position for the next text part
+                y += (bbox[3] - bbox[1]) + 5
 
+            # Save the image
             path = os.path.join(self.temp_manager.image_dir, f"frame_{idx:08d}.png")
             self._save_image(img, path)
             
+            # Calculate and adjust duration if necessary
             duration = float(entry['end_time'] - entry['start_time'])
             adjusted_duration = duration / self.settings.get('speed_factor', 1.0)
+            
             return {
                 'path': path,
                 'duration': round(adjusted_duration, 3)
             }
+        
         except Exception as e:
             logging.error(f"Styled image failed: {str(e)}")
             return None
@@ -217,21 +248,25 @@ class ImageGenerator:
         return Image.new('RGB', (1280, 720), bg_color)
 
     def get_font(self, face: str, size: int, bold: bool, italic: bool) -> ImageFont.FreeTypeFont:
-        """Improved font loading with better error handling"""
+        """Improved font loading with caching and better error handling"""
+        key = (face, size, bold, italic)
+        if key in self.font_cache:
+            return self.font_cache[key]
+        
         try:
-            if self.settings.get('custom_font'):
-                return ImageFont.truetype(
-                    self.settings['custom_font'], 
-                    size,
-                    index=1 if italic else 0
-                )
-            
-            # System font fallback
-            font_path = self._find_system_font(face, bold, italic)
-            return ImageFont.truetype(font_path, size)
+            # When a custom font is set and no style variations are needed, use it
+            if self.settings.get('custom_font') and not (bold or italic):
+                font = ImageFont.truetype(self.settings['custom_font'], size)
+            else:
+                # System font fallback (will try to find bold/italic versions)
+                font_path = self._find_system_font(face, bold, italic)
+                font = ImageFont.truetype(font_path, size)
         except Exception as e:
             logging.error(f"Font error: {str(e)}")
-            return ImageFont.load_default(size)
+            font = ImageFont.load_default()  # load_default does not take a size argument
+        
+        self.font_cache[key] = font
+        return font
 
     def wrap_text(self, text: str, font: ImageFont.FreeTypeFont, max_width: int) -> List[str]:
         lines = []
@@ -241,7 +276,9 @@ class ImageGenerator:
             current_length = 0
             
             for word in words:
-                word_length = font.getlength(word + ' ')
+                # Measure the word length including a space
+                word_bbox = font.getbbox(word + ' ')
+                word_length = word_bbox[2] - word_bbox[0]
                 if current_length + word_length > max_width:
                     lines.append(' '.join(current_line))
                     current_line = [word]
@@ -320,5 +357,6 @@ class ImageGenerator:
         if os.path.exists(font_path):
             return font_path
             
-        # Fallback to default system font
-        return ImageFont.load_default().path
+        # Fallback to default system font from Pillow's load_default (which returns a font object, not a path)
+        # Here we return a common fallback; you might adjust this for your system.
+        return os.path.join(font_dir, 'arial.ttf')

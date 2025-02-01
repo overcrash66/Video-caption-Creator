@@ -46,7 +46,28 @@ pip install torch==2.5.1+cu118 torchaudio==2.5.1+cu118 --index-url https://downl
 
 You can run the GUI with `python main.py`.
 
+![flowchart](image/flowchart.png)
 ![Demo](image/App.png)
+
+## Unit Tests
+
+Install tesseract
+
+```
+https://github.com/UB-Mannheim/tesseract/wiki
+```
+
+Install unit tests requirements
+
+```
+pip install test-requirements.txt
+```
+
+Run tests
+
+```
+python run-tests.py
+```
 
 ## License
 

@@ -1,0 +1,323 @@
+1
+00:00:00,310 --> 00:00:00,760
+<font size='48'><font face='Arial'><b>1.</b> Quand doit-on</font></font>
+
+2
+00:00:00,760 --> 00:00:01,460
+<font size='48'><font face='Arial'>1. Quand doit-on</font></font>
+
+3
+00:00:01,460 --> 00:00:01,560
+<font size='48'><font face='Arial'>1. <b>Quand</b> doit-on</font></font>
+
+4
+00:00:01,560 --> 00:00:01,720
+<font size='48'><font face='Arial'>1. Quand <b>doit</b>-on</font></font>
+
+5
+00:00:01,720 --> 00:00:01,860
+<font size='48'><font face='Arial'>1. Quand doit<b>-on</b></font></font>
+
+6
+00:00:01,860 --> 00:00:02,080
+<font size='48'><font face='Arial'><b>tenir</b> une élection fédérale</font></font>
+
+7
+00:00:02,080 --> 00:00:02,260
+<font size='48'><font face='Arial'>tenir <b>une</b> élection fédérale</font></font>
+
+8
+00:00:02,260 --> 00:00:02,340
+<font size='48'><font face='Arial'>tenir une élection fédérale</font></font>
+
+9
+00:00:02,340 --> 00:00:02,440
+<font size='48'><font face='Arial'>tenir une <b>élection</b> fédérale</font></font>
+
+10
+00:00:02,440 --> 00:00:02,890
+<font size='48'><font face='Arial'>tenir une élection <b>fédérale</b></font></font>
+
+11
+00:00:02,960 --> 00:00:03,260
+<font size='48'><font face='Arial'><b>selon</b> la législation</font></font>
+
+12
+00:00:03,260 --> 00:00:03,440
+<font size='48'><font face='Arial'>selon <b>la</b> législation</font></font>
+
+13
+00:00:03,440 --> 00:00:03,980
+<font size='48'><font face='Arial'>selon la <b>législation</b></font></font>
+
+14
+00:00:03,980 --> 00:00:04,340
+<font size='48'><font face='Arial'><b>adoptée</b> par le Parlement?</font></font>
+
+15
+00:00:04,340 --> 00:00:04,480
+<font size='48'><font face='Arial'>adoptée <b>par</b> le Parlement?</font></font>
+
+16
+00:00:04,480 --> 00:00:04,560
+<font size='48'><font face='Arial'>adoptée par <b>le</b> Parlement?</font></font>
+
+17
+00:00:04,560 --> 00:00:04,840
+<font size='48'><font face='Arial'>adoptée par le <b>Parlement?</b></font></font>
+
+18
+00:00:05,680 --> 00:00:05,780
+<font size='48'><font face='Arial'><b>1.</b> Quand le Roi</font></font>
+
+19
+00:00:05,780 --> 00:00:06,300
+<font size='48'><font face='Arial'>1. Quand le Roi</font></font>
+
+20
+00:00:06,300 --> 00:00:06,400
+<font size='48'><font face='Arial'>1. <b>Quand</b> le Roi</font></font>
+
+21
+00:00:06,400 --> 00:00:06,540
+<font size='48'><font face='Arial'>1. Quand <b>le</b> Roi</font></font>
+
+22
+00:00:06,540 --> 00:00:06,680
+<font size='48'><font face='Arial'>1. Quand le <b>Roi</b></font></font>
+
+23
+00:00:06,680 --> 00:00:06,800
+<font size='48'><font face='Arial'><b>veut</b> remplacer le premier ministre.</font></font>
+
+24
+00:00:06,800 --> 00:00:07,240
+<font size='48'><font face='Arial'>veut <b>remplacer</b> le premier ministre.</font></font>
+
+25
+00:00:07,240 --> 00:00:07,360
+<font size='48'><font face='Arial'>veut remplacer <b>le</b> premier ministre.</font></font>
+
+26
+00:00:07,360 --> 00:00:07,600
+<font size='48'><font face='Arial'>veut remplacer le <b>premier</b> ministre.</font></font>
+
+27
+00:00:07,600 --> 00:00:07,950
+<font size='48'><font face='Arial'>veut remplacer le premier <b>ministre.</b></font></font>
+
+28
+00:00:08,800 --> 00:00:08,920
+<font size='48'><font face='Arial'><b>B.</b> Dans les quatre ans,</font></font>
+
+29
+00:00:08,920 --> 00:00:09,440
+<font size='48'><font face='Arial'>B. Dans les quatre ans,</font></font>
+
+30
+00:00:09,440 --> 00:00:09,540
+<font size='48'><font face='Arial'>B. <b>Dans</b> les quatre ans,</font></font>
+
+31
+00:00:09,540 --> 00:00:09,680
+<font size='48'><font face='Arial'>B. Dans <b>les</b> quatre ans,</font></font>
+
+32
+00:00:09,680 --> 00:00:09,720
+<font size='48'><font face='Arial'>B. Dans les quatre ans,</font></font>
+
+33
+00:00:09,720 --> 00:00:09,920
+<font size='48'><font face='Arial'>B. Dans les <b>quatre</b> ans,</font></font>
+
+34
+00:00:09,920 --> 00:00:10,060
+<font size='48'><font face='Arial'>B. Dans les quatre <b>ans,</b></font></font>
+
+35
+00:00:10,680 --> 00:00:10,940
+<font size='48'><font face='Arial'><b>suivant</b> la dernière élection.</font></font>
+
+36
+00:00:10,940 --> 00:00:11,100
+<font size='48'><font face='Arial'>suivant <b>la</b> dernière élection.</font></font>
+
+37
+00:00:11,100 --> 00:00:11,320
+<font size='48'><font face='Arial'>suivant la <b>dernière</b> élection.</font></font>
+
+38
+00:00:11,320 --> 00:00:11,700
+<font size='48'><font face='Arial'>suivant la dernière <b>élection.</b></font></font>
+
+39
+00:00:12,300 --> 00:00:12,580
+<font size='48'><font face='Arial'><b>C.</b> Dans les 5</font></font>
+
+40
+00:00:12,580 --> 00:00:13,040
+<font size='48'><font face='Arial'>C. Dans les 5</font></font>
+
+41
+00:00:13,040 --> 00:00:13,140
+<font size='48'><font face='Arial'>C. <b>Dans</b> les 5</font></font>
+
+42
+00:00:13,140 --> 00:00:13,260
+<font size='48'><font face='Arial'>C. Dans <b>les</b> 5</font></font>
+
+43
+00:00:13,260 --> 00:00:13,460
+<font size='48'><font face='Arial'>C. Dans les <b>5</b></font></font>
+
+44
+00:00:13,460 --> 00:00:13,700
+<font size='48'><font face='Arial'><b>ans</b> suivant la dernière élection.</font></font>
+
+45
+00:00:13,700 --> 00:00:14,060
+<font size='48'><font face='Arial'>ans <b>suivant</b> la dernière élection.</font></font>
+
+46
+00:00:14,060 --> 00:00:14,200
+<font size='48'><font face='Arial'>ans suivant <b>la</b> dernière élection.</font></font>
+
+47
+00:00:14,200 --> 00:00:14,480
+<font size='48'><font face='Arial'>ans suivant la <b>dernière</b> élection.</font></font>
+
+48
+00:00:14,480 --> 00:00:14,980
+<font size='48'><font face='Arial'>ans suivant la dernière <b>élection.</b></font></font>
+
+49
+00:00:15,800 --> 00:00:15,920
+<font size='48'><font face='Arial'><b>D</b>,</font></font>
+
+50
+00:00:15,920 --> 00:00:16,240
+<font size='48'><font face='Arial'>D<b></b>,</font></font>
+
+51
+00:00:16,240 --> 00:00:16,520
+<font size='48'><font face='Arial'>D<b>,</b></font></font>
+
+52
+00:00:16,880 --> 00:00:16,980
+<font size='48'><font face='Arial'><b>le</b> premier ministre</font></font>
+
+53
+00:00:16,980 --> 00:00:17,260
+<font size='48'><font face='Arial'>le <b>premier</b> ministre</font></font>
+
+54
+00:00:17,260 --> 00:00:17,760
+<font size='48'><font face='Arial'>le premier <b>ministre</b></font></font>
+
+55
+00:00:17,780 --> 00:00:18,060
+<font size='48'><font face='Arial'><b>peut</b> convoquer l'élection</font></font>
+
+56
+00:00:18,060 --> 00:00:18,560
+<font size='48'><font face='Arial'>peut <b>convoquer</b> l'élection</font></font>
+
+57
+00:00:18,560 --> 00:00:18,680
+<font size='48'><font face='Arial'>peut convoquer <b>l</b>'élection</font></font>
+
+58
+00:00:18,680 --> 00:00:18,980
+<font size='48'><font face='Arial'>peut convoquer l<b>'élection</b></font></font>
+
+59
+00:00:18,980 --> 00:00:19,200
+<font size='48'><font face='Arial'><b>à</b> n'importe quel</font></font>
+
+60
+00:00:19,200 --> 00:00:19,420
+<font size='48'><font face='Arial'>à <b>n</b>'importe quel</font></font>
+
+61
+00:00:19,420 --> 00:00:19,700
+<font size='48'><font face='Arial'>à n<b>'importe</b> quel</font></font>
+
+62
+00:00:19,700 --> 00:00:19,980
+<font size='48'><font face='Arial'>à n'importe <b>quel</b></font></font>
+
+63
+00:00:19,980 --> 00:00:20,220
+<font size='48'><font face='Arial'><b>moment</b> de sa propre volonté.</font></font>
+
+64
+00:00:20,220 --> 00:00:20,380
+<font size='48'><font face='Arial'>moment <b>de</b> sa propre volonté.</font></font>
+
+65
+00:00:20,380 --> 00:00:20,520
+<font size='48'><font face='Arial'>moment de <b>sa</b> propre volonté.</font></font>
+
+66
+00:00:20,520 --> 00:00:20,680
+<font size='48'><font face='Arial'>moment de sa propre volonté.</font></font>
+
+67
+00:00:20,680 --> 00:00:20,780
+<font size='48'><font face='Arial'>moment de sa <b>propre</b> volonté.</font></font>
+
+68
+00:00:20,780 --> 00:00:21,330
+<font size='48'><font face='Arial'>moment de sa propre <b>volonté.</b></font></font>
+
+69
+00:00:22,000 --> 00:00:22,100
+<font size='48'><font face='Arial'><b>La</b> réponse est.</font></font>
+
+70
+00:00:22,100 --> 00:00:22,340
+<font size='48'><font face='Arial'>La <b>réponse</b> est.</font></font>
+
+71
+00:00:22,340 --> 00:00:22,720
+<font size='48'><font face='Arial'>La réponse <b>est.</b></font></font>
+
+72
+00:00:23,420 --> 00:00:23,520
+<font size='48'><font face='Arial'><b>B.</b> dans les quatre</font></font>
+
+73
+00:00:23,520 --> 00:00:23,680
+<font size='48'><font face='Arial'>B. dans les quatre</font></font>
+
+74
+00:00:23,680 --> 00:00:23,740
+<font size='48'><font face='Arial'>B. <b>dans</b> les quatre</font></font>
+
+75
+00:00:23,740 --> 00:00:23,880
+<font size='48'><font face='Arial'>B. dans <b>les</b> quatre</font></font>
+
+76
+00:00:23,880 --> 00:00:24,100
+<font size='48'><font face='Arial'>B. dans les <b>quatre</b></font></font>
+
+77
+00:00:24,120 --> 00:00:24,300
+<font size='48'><font face='Arial'><b>ans</b> suivant la dernière élection.</font></font>
+
+78
+00:00:24,300 --> 00:00:24,620
+<font size='48'><font face='Arial'>ans <b>suivant</b> la dernière élection.</font></font>
+
+79
+00:00:24,620 --> 00:00:24,720
+<font size='48'><font face='Arial'>ans suivant <b>la</b> dernière élection.</font></font>
+
+80
+00:00:24,720 --> 00:00:24,960
+<font size='48'><font face='Arial'>ans suivant la <b>dernière</b> élection.</font></font>
+
+81
+00:00:24,960 --> 00:00:25,240
+<font size='48'><font face='Arial'>ans suivant la dernière <b>élection.</b></font></font>

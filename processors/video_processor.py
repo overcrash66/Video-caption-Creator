@@ -333,11 +333,9 @@ class VideoProcessor:
                 logging.info("Video and audio are already in sync.")
                 os.replace(video_path, output_path)  # Just rename the video
                 return True
-            '''
-            # If the video is longer than the audio, adjust the audio speed
-            if video_duration > audio_duration:
+            else:
                 speed_factor = video_duration / audio_duration
-                logging.info(f"Video is longer than audio. Adjusting audio speed by factor {speed_factor:.2f}.")
+                logging.info(f"Video is shorter than audio. Adjusting audio speed by factor {speed_factor:.2f}.")
                 video_stream = ffmpeg.input(video_path)['v']
                 audio_stream = (
                     ffmpeg.input(audio_path)['a']
@@ -348,37 +346,9 @@ class VideoProcessor:
                     .output(output_path, acodec='aac', audio_bitrate='192k')
                     .overwrite_output()
                     .run(quiet=True)
-                )
-            else:'''
-            # logging.info(f"Video is shorter than audio. Trimming audio to match video duration.")
-            # video_stream = ffmpeg.input(video_path)['v']
-            # audio_stream = (
-            #     ffmpeg.input(audio_path)['a']
-            #     .filter('atrim', duration=video_duration)
-            # )
-            # (
-            #     ffmpeg.concat(video_stream, audio_stream, v=1, a=1)
-            #     .output(output_path, acodec='aac', audio_bitrate='192k')
-            #     .overwrite_output()
-            #     .run(quiet=True)
-            # )
+                ) 
 
-            # If the video is shorter than the audio, change the audio speed to match the video
-            speed_factor = video_duration / audio_duration
-            logging.info(f"Video is shorter than audio. Adjusting audio speed by factor {speed_factor:.2f}.")
-            video_stream = ffmpeg.input(video_path)['v']
-            audio_stream = (
-                ffmpeg.input(audio_path)['a']
-                .filter('atempo', speed_factor)
-            )
-            (
-                ffmpeg.concat(video_stream, audio_stream, v=1, a=1)
-                .output(output_path, acodec='aac', audio_bitrate='192k')
-                .overwrite_output()
-                .run(quiet=True)
-            ) 
-
-            return True
+                return True
         except ffmpeg.Error as e:
             logging.error(f"Failed to sync audio with video: {e.stderr.decode().strip()}")
             return False

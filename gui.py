@@ -16,6 +16,7 @@ from typing import List, Dict, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
 from processors.sub2audio import SubToAudio
 from pydub import AudioSegment
+import webbrowser
 
 class VideoConverterApp:
     def __init__(self, root):
@@ -41,7 +42,7 @@ class VideoConverterApp:
         about_text = (
             "Developed by: Wael Sahli\n"
             "Year: 2025\n"
-            "Version: v1.0"
+            "Version: v1.1"
         )
         messagebox.showinfo("About", about_text)
 
@@ -173,6 +174,9 @@ class VideoConverterApp:
         self.style.configure('Header.TLabel', font=('Helvetica', 10, 'bold'))
         self.style.configure('Progressbar', thickness=20)
 
+    def open_link(self, event):
+        webbrowser.open("https://github.com/overcrash66")
+
     def create_widgets(self):
         try:
             main_frame = ttk.Frame(self.root, padding=20)
@@ -203,6 +207,11 @@ class VideoConverterApp:
                 bd=2
             )
             about_button.pack(side=tk.RIGHT, padx=20, pady=20)
+
+            # Add a link to the GitHub repository
+            link_label = tk.Label(self.root, text="Follow Us on GuitHub", fg="blue", cursor="hand2")
+            link_label.pack(anchor="ne", pady=(5, 0))
+            link_label.bind("<Button-1>", self.open_link)
 
             # Settings Panel
             settings_frame = ttk.LabelFrame(main_frame, text="Settings", padding=10)
@@ -866,11 +875,6 @@ class VideoConverterApp:
         """Generate audio (ensure this is properly synchronous)"""
         if not self.current_tts:
             raise RuntimeError("No TTS model initialized")
-
-        #output_path = os.path.join(self.temp_manager.root_dir, output_path)
-        
-        # Clear previous audio path
-        #self.generated_audio_path = None
         
         try:
             # Perform actual audio generation
