@@ -15,6 +15,7 @@ from processors.srt_parser import SRTParser
 from processors.image_generator import ImageGenerator
 from utils.style_parser import StyleParser
 from utils.helpers import TempFileManager
+import numpy as np
 
 custom_config = r'--oem 3 --psm 6'
 class TestImageGeneration(unittest.TestCase):
@@ -68,7 +69,7 @@ class TestImageGeneration(unittest.TestCase):
             # Validate image text content using OCR
             img = Image.open(image['path'])
             #extracted_text = pytesseract.image_to_string(img)
-            extracted_text = pytesseract.image_to_string(image, config=custom_config, lang='eng')
+            extracted_text = pytesseract.image_to_string(img, config=custom_config, lang='eng')
             self.assertIn(entry['text'].strip(), extracted_text.strip())
             img.close()
 
