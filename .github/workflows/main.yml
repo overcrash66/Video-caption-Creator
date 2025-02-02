@@ -44,15 +44,17 @@ jobs:
       - name: Build binary with PyInstaller (non-single file)
         run: |
           pyinstaller --noconfirm --name Video-Caption-Creator `
-            --add-data "utils;utils" `
-            --add-data "processors;processors" `
-            --add-data "gui.py;." `
-            --hidden-import=tkinter `
-            --hidden-import=_tkinter `
-            --hidden-import=tkinter.ttk `
-            --hidden-import=tkinter.filedialog `
-            --hidden-import=tkinter.messagebox `
-            --hidden-import=tkinter.colorchooser
+          --add-data "utils;utils" `
+          --add-data "processors;processors" `
+          --add-data "gui.py;." `
+          --hidden-import=tkinter `
+          --hidden-import=_tkinter `
+          --hidden-import=tkinter.ttk `
+          --hidden-import=tkinter.filedialog `
+          --hidden-import=tkinter.messagebox `
+          --hidden-import=tkinter.colorchooser `
+          main.py
+
       
       - name: Debug Tkinter Installation
         run: python -c "import tkinter; print('Tkinter is installed')"
