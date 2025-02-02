@@ -42,6 +42,7 @@ jobs:
           python -m ensurepip
           pip install pillow pydub TTS ffmpeg-python
           pip install torch torchaudio torchvision
+          pip install librosa
 
       - name: Build binary with PyInstaller (non-single file)
         run: |
@@ -74,6 +75,7 @@ jobs:
           --hidden-import=torchvision `
           --hidden-import=torchaudio `
           --hidden-import=torch.utils `
+          --hidden-import=librosa `
           main.py
 
       
