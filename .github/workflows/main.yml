@@ -80,6 +80,8 @@ jobs:
           --hidden-import=torchvision `
           --hidden-import=torchaudio `
           --hidden-import=torch.utils `
+          --hidden-import=torch.jit `
+          --exclude-module torch.jit `
           --hidden-import=librosa `
           --hidden-import=TTS `
           --hidden-import=TTS.api `
