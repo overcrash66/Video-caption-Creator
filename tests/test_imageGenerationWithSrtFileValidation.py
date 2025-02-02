@@ -49,11 +49,11 @@ class TestImageGeneration(unittest.TestCase):
         """Test that generated images match SRT duration and text."""
         srt_content = """1
         00:00:00,000 --> 00:00:05,000
-        This is the first subtitle.
+        FIRST SUBTITLE
         
         2
         00:00:05,000 --> 00:00:10,000
-        This is the second subtitle."""
+        SECOND SUBTITLE"""
         srt_file = os.path.join(self.temp_dir.name, "test.srt")
         with open(srt_file, "w", encoding='utf-8') as f:
             f.write(srt_content)
