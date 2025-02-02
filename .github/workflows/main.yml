@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'release'
+        description: 'Release tag name (e.g., v1.0.0)'
         required: true
   push:
     tags:
@@ -15,13 +15,12 @@ jobs:
     runs-on: ubuntu-latest
    
     permissions:
-      contents: write
-      packages: write
-      issues: write
-    
+      contents: write  # Needed for creating releases
+      # Removed unnecessary packages: write and issues: write permissions
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # Updated to latest version
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -44,16 +43,18 @@ jobs:
 
       - name: Build binary with PyInstaller
         run: |
-          pyinstaller --onefile main.py
+          # Add necessary data files using PyInstaller's --add-data
+          pyinstaller --onefile \
+            --add-data 'utils:utils' \
+            --add-data 'processors:processors' \
+            --add-data 'gui.py:.' \
+            main.py
 
       - name: Package application into ZIP
         run: |
-          mkdir -p build_artifacts
-          cp dist/main build_artifacts/
-          cp -r utils build_artifacts/
-          cp -r processors build_artifacts/
-          cp gui.py build_artifacts/
-          cd build_artifacts && zip -r app.zip . && cd ..
+          mkdir -p release
+          cp dist/main release/
+          cd release && zip -r app.zip ./* && cd ..
 
       - name: Determine tag name
         id: tag_name
@@ -66,21 +67,10 @@ jobs:
 
       - name: Create GitHub Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1  # More modern release action
+        if: success()
         with:
           tag_name: ${{ steps.tag_name.outputs.TAG_NAME }}
-          release_name: Release ${{ steps.tag_name.outputs.TAG_NAME }}
-          draft: false
-          prerelease: false
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build_artifacts/app.zip
-          asset_name: app.zip
-          asset_content_type: application/zip
+          name: Release ${{ steps.tag_name.outputs.TAG_NAME }}
+          files: |
+            release/app.zip
