@@ -1,7 +1,7 @@
 import unittest
 import os, sys
 import tempfile
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 import pytesseract
 # Configure Tesseract path - update this path according to your system
 if sys.platform.startswith('win'):
@@ -66,9 +66,14 @@ class TestImageGeneration(unittest.TestCase):
         for image, entry in zip(images, entries):
             # Validate image duration
             self.assertAlmostEqual(image['duration'], entry['duration'], delta=0.7)  # Allow slight tolerance
+            
             # Validate image text content using OCR
             img = Image.open(image['path'])
             #extracted_text = pytesseract.image_to_string(img)
+            gray_image = img.convert('L')
+            img = ImageEnhance.Contrast(gray_image).enhance(2)
+            img = ImageEnhance.Brightness(img).enhance(2)
+
             extracted_text = pytesseract.image_to_string(img, config=custom_config, lang='eng')
             self.assertIn(entry['text'].strip(), extracted_text.strip())
             img.close()
