@@ -10,7 +10,8 @@ from TTS.api import TTS
 from pydub import AudioSegment
 from TTS.utils.manage import ModelManager
 manager = ModelManager()
-
+torch.jit.enable_onednn_fusion(False
+                               
 class SubToAudio:
 
   def __init__( self,model_name:str=None,model_path:str=None,config_path:str=None,progress_bar:bool=False,fairseq_language:str=None,**kwargs,):
