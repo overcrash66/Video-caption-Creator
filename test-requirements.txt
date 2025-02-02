@@ -3,3 +3,4 @@ pillow
 ffmpeg-python
 TTS
 pydub
+pytesseract
