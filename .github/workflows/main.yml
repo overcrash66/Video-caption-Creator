@@ -32,25 +32,75 @@ jobs:
           pip install pyinstaller
           pip install -r requirements.txt
 
-      - name: Build binary with PyInstaller
-        run: cmd /c "pyinstaller --onefile --name main.exe --add-data utils;utils --add-data processors;processors --add-data gui.py;. main.py"
+      name: Build, Package, and Release Python App
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag name (e.g., v1.0.0)'
+        required: true
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    permissions:
+      contents: write  # Needed for creating releases
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: C:\Users\runneradmin\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+
+      - name: Build binary with PyInstaller (non-single file)
+        run: cmd /c "pyinstaller --noconfirm --name Video-Caption-Creator --add-data utils;utils --add-data processors;processors --add-data gui.py;. main.py"
+
+      - name: Debug PyInstaller Output
+        run: dir dist\Video-Caption-Creator
 
       - name: Package application into ZIP
         run: |
           mkdir release
-          copy dist\app.exe release\
-          powershell Compress-Archive -Path release\* -DestinationPath release\app.zip
+          xcopy /E /I dist\Video-Caption-Creator release\
+          cd release && powershell -Command "Compress-Archive -Path * -DestinationPath Video-Caption-Creator.zip" && cd ..
 
       - name: Determine tag name
         id: tag_name
         run: |
-          echo "TAG_NAME=${{ github.ref_name }}" >> $GITHUB_ENV
+          if ("%GITHUB_EVENT_NAME%"=="workflow_dispatch") (
+            echo TAG_NAME=%GITHUB_EVENT_INPUTS_TAG_NAME%>> %GITHUB_OUTPUT%
+          ) else (
+            echo TAG_NAME=%GITHUB_REF_NAME%>> %GITHUB_OUTPUT%
+          )
 
       - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v1
         if: success()
         with:
-          tag_name: ${{ env.TAG_NAME }}
-          name: Release ${{ env.TAG_NAME }}
-          files: release/app.zip
+          tag_name: ${{ steps.tag_name.outputs.TAG_NAME }}
+          name: Release ${{ steps.tag_name.outputs.TAG_NAME }}
+          files: |
+            release/Video-Caption-Creator.zip
