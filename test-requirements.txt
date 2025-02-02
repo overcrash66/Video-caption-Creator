@@ -1,3 +1,5 @@
 pytesseract
 pillow
 ffmpeg-python
+TTS
+pydub
