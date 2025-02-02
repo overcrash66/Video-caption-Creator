@@ -13,7 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import pytesseract
 custom_config = r'--oem 3 --psm 6'
-extracted_text = pytesseract.image_to_string(image, config=custom_config, lang='eng'
+extracted_text = pytesseract.image_to_string(image, config=custom_config, lang='eng')
 
 from processors.srt_parser import SRTParser
 from processors.image_generator import ImageGenerator
