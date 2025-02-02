@@ -12,28 +12,19 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-   
+    runs-on: windows-latest  # Change to Windows for .exe build
+
     permissions:
       contents: write  # Needed for creating releases
-      # Removed unnecessary packages: write and issues: write permissions
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4  # Updated to latest version
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
@@ -41,36 +32,31 @@ jobs:
           pip install pyinstaller
           pip install -r requirements.txt
 
-      - name: Build binary with PyInstaller
+      - name: Build Windows .exe with PyInstaller
         run: |
-          # Add necessary data files using PyInstaller's --add-data
-          pyinstaller --onefile \
-            --add-data 'utils:utils' \
-            --add-data 'processors:processors' \
-            --add-data 'gui.py:.' \
+          pyinstaller --onefile ^
+            --add-data "utils;utils" ^
+            --add-data "processors;processors" ^
+            --add-data "gui.py;." ^
+            --name app ^
             main.py
 
       - name: Package application into ZIP
         run: |
-          mkdir -p release
-          cp dist/main release/
-          cd release && zip -r app.zip ./* && cd ..
+          mkdir release
+          copy dist\app.exe release\
+          powershell Compress-Archive -Path release\* -DestinationPath release\app.zip
 
       - name: Determine tag name
         id: tag_name
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "TAG_NAME=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "TAG_NAME=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          fi
+          echo "TAG_NAME=${{ github.ref_name }}" >> $GITHUB_ENV
 
       - name: Create GitHub Release
         id: create_release
-        uses: softprops/action-gh-release@v1  # More modern release action
+        uses: softprops/action-gh-release@v1
         if: success()
         with:
-          tag_name: ${{ steps.tag_name.outputs.TAG_NAME }}
-          name: Release ${{ steps.tag_name.outputs.TAG_NAME }}
-          files: |
-            release/app.zip
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
+          files: release/app.zip
