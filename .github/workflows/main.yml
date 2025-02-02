@@ -1,9 +1,14 @@
 name: Build, Package, and Release Python App
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'release'
+        required: true
   push:
     tags:
-      - 'v*.*.*'  # Triggers on version tags like v1.0.0
+      - 'v*.*.*'
 
 jobs:
   build:
@@ -45,21 +50,28 @@ jobs:
           cp gui.py build_artifacts/
           cd build_artifacts && zip -r app.zip . && cd ..
 
-      # Create GitHub Release
+      - name: Determine tag name
+        id: tag_name
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "TAG_NAME=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "TAG_NAME=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          tag_name: ${{ steps.tag_name.outputs.TAG_NAME }}
+          release_name: Release ${{ steps.tag_name.outputs.TAG_NAME }}
           draft: false
           prerelease: false
 
-      # Upload build artifact to the release
       - name: Upload Release Asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
