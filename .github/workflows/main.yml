@@ -40,7 +40,7 @@ jobs:
           pip install pyinstaller
           pip install -r requirements.txt
           python -m ensurepip
-          pip install pillow pydub TTS ffmpeg
+          pip install pillow pydub TTS ffmpeg-python
 
       - name: Build binary with PyInstaller (non-single file)
         run: |
