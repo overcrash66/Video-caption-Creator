@@ -32,8 +32,8 @@ jobs:
           pip install pyinstaller
           pip install -r requirements.txt
 
-      - name: Build Windows .exe with PyInstaller
-        run: cmd /c "pyinstaller --name Video-Caption-Creator.exe --add-data 'utils;utils' --add-data 'processors;processors' --add-data 'gui.py;.' main.py"
+      - name: Build binary with PyInstaller
+        run: cmd /c "pyinstaller --onefile --name main.exe --add-data utils;utils --add-data processors;processors --add-data gui.py;. main.py"
 
       - name: Package application into ZIP
         run: |
