@@ -39,9 +39,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller
           pip install -r requirements.txt
+          python -m ensurepip
 
       - name: Build binary with PyInstaller (non-single file)
-        run: cmd /c "pyinstaller --noconfirm --name Video-Caption-Creator --add-data utils;utils --add-data processors;processors --add-data gui.py;. main.py"
+        run: |
+          pyinstaller --noconfirm --name Video-Caption-Creator `
+            --add-data "utils;utils" `
+            --add-data "processors;processors" `
+            --add-data "gui.py;." `
+            --hidden-import=tkinter `
+            --hidden-import=_tkinter `
+            --hidden-import=tkinter.ttk `
+            --hidden-import=tkinter.filedialog `
+            --hidden-import=tkinter.messagebox `
+            --hidden-import=tkinter.colorchooser
+      
+      - name: Debug Tkinter Installation
+        run: python -c "import tkinter; print('Tkinter is installed')"
 
       - name: Debug PyInstaller Output
         run: dir dist\Video-Caption-Creator
