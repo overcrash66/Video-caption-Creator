@@ -1,12 +1,9 @@
-name: Build and Package Python App
+name: Build, Package, and Release Python App
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v1.0.0
 
 jobs:
   build:
@@ -48,8 +45,25 @@ jobs:
           cp gui.py build_artifacts/
           cd build_artifacts && zip -r app.zip . && cd ..
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
+      # Create GitHub Release
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: app-binary
-          path: build_artifacts/app.zip
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      # Upload build artifact to the release
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build_artifacts/app.zip
+          asset_name: app.zip
+          asset_content_type: application/zip
