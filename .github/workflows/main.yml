@@ -40,10 +40,11 @@ jobs:
           pip install pyinstaller
           pip install -r requirements.txt
           python -m ensurepip
+          pip install pillow pydub TTS ffmpeg
 
       - name: Build binary with PyInstaller (non-single file)
         run: |
-          pyinstaller --noconfirm --name Video-Caption-Creator `
+         pyinstaller --noconfirm --name Video-Caption-Creator `
           --add-data "utils;utils" `
           --add-data "processors;processors" `
           --add-data "gui.py;." `
@@ -53,6 +54,20 @@ jobs:
           --hidden-import=tkinter.filedialog `
           --hidden-import=tkinter.messagebox `
           --hidden-import=tkinter.colorchooser `
+          --hidden-import=PIL.Image `
+          --hidden-import=PIL.ImageDraw `
+          --hidden-import=PIL.ImageFont `
+          --hidden-import=PIL.ImageColor `
+          --hidden-import=PIL.ImageOps `
+          --hidden-import=PIL.ImageTk `
+          --hidden-import=pydub `
+          --hidden-import=TTS `
+          --hidden-import=ffmpeg `
+          --hidden-import=concurrent.futures `
+          --hidden-import=json `
+          --hidden-import=os `
+          --hidden-import=logging `
+          --hidden-import=subprocess `
           main.py
 
       
