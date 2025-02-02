@@ -43,6 +43,7 @@ jobs:
           pip install pillow pydub TTS ffmpeg-python
           pip install torch torchaudio torchvision
           pip install librosa
+          pip install TTS
 
       - name: Build binary with PyInstaller (non-single file)
         run: |
@@ -50,6 +51,7 @@ jobs:
           --add-data "utils;utils" `
           --add-data "processors;processors" `
           --add-data "gui.py;." `
+          --add-data "$(python -c 'import TTS, os; print(os.path.join(TTS.__path__[0], \"VERSION\"))'):TTS" `
           --hidden-import=tkinter `
           --hidden-import=_tkinter `
           --hidden-import=tkinter.ttk `
@@ -76,6 +78,9 @@ jobs:
           --hidden-import=torchaudio `
           --hidden-import=torch.utils `
           --hidden-import=librosa `
+          --hidden-import=TTS `
+          --hidden-import=TTS.api `
+          --hidden-import=TTS.tts.configs `
           main.py
 
       
