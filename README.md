@@ -1,17 +1,18 @@
 # Video caption Creator
 
-Video caption Creator: is a Python program that uses an SRT file to generate a videos with captions.
-It support generating speech / audio from SRT files
-It also support merging and sync video with audio 
+The Video Caption Creator is a Python program designed to generate captioned videos using SRT files. 
+It supports generating speech or audio from SRT files, as well as merging and synchronizing video with audio
 
 ### Captivating captions
 
-`Video caption Creator` supports SRT file with embed html style to be able to create "captivating" captions,
- which means that you can produce captions that highlight
+"Video Caption Creator" supports SRT files with embedded HTML styling, allowing you to create captivating captions with enhanced visual appeal. 
+This means you can highlight specific words, change formatting, and make your subtitles more engaging.
 
-Overall the following options are available when it comes to styling the captions:
+Key styling options include:
 
-- Choose the caption font; custom font, style, size, color ..
+    Custom fonts
+    Font style, size, and color
+    Additional text formatting for emphasis
 
 [![VcC](https://img.youtube.com/vi/rjFq3P9vhHs/0.jpg)](https://www.youtube.com/watch?v=rjFq3P9vhHs)
 
