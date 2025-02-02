@@ -11,15 +11,12 @@ if sys.platform.startswith('win'):
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-import pytesseract
-custom_config = r'--oem 3 --psm 6'
-extracted_text = pytesseract.image_to_string(Image, config=custom_config, lang='eng')
-
 from processors.srt_parser import SRTParser
 from processors.image_generator import ImageGenerator
 from utils.style_parser import StyleParser
 from utils.helpers import TempFileManager
 
+custom_config = r'--oem 3 --psm 6'
 class TestImageGeneration(unittest.TestCase):
 
     def setUp(self):
@@ -70,7 +67,8 @@ class TestImageGeneration(unittest.TestCase):
             self.assertAlmostEqual(image['duration'], entry['duration'], delta=0.7)  # Allow slight tolerance
             # Validate image text content using OCR
             img = Image.open(image['path'])
-            extracted_text = pytesseract.image_to_string(img)
+            #extracted_text = pytesseract.image_to_string(img)
+            extracted_text = pytesseract.image_to_string(image, config=custom_config, lang='eng')
             self.assertIn(entry['text'].strip(), extracted_text.strip())
             img.close()
 
