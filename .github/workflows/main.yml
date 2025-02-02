@@ -54,12 +54,13 @@ jobs:
 
       - name: Determine tag name
         id: tag_name
+        shell: pwsh
         run: |
-          if ("%GITHUB_EVENT_NAME%"=="workflow_dispatch") (
-            echo TAG_NAME=%GITHUB_EVENT_INPUTS_TAG_NAME%>> %GITHUB_OUTPUT%
-          ) else (
-            echo TAG_NAME=%GITHUB_REF_NAME%>> %GITHUB_OUTPUT%
-          )
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            echo "TAG_NAME=${{ github.event.inputs.tag_name }}" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "TAG_NAME=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Create GitHub Release
         id: create_release
