@@ -60,10 +60,9 @@ jobs:
           $TRAINER_VERSION_PATH = python -c "import trainer, os; print(os.path.dirname(trainer.__file__))"
           $torchPath = python -c "import torch, os; print(os.path.dirname(torch.__file__))"
           Write-Host "Torch path: $torchPath"
-          pyinstaller --additional-hooks-dir=. --onefile --name Video-Caption-Creator `
+          pyinstaller --collect-all TTS --name Video-Caption-Creator `
           --add-data "utils;utils" `
           --add-data "processors;processors" `
-           --add-data "main.py;." `
           --add-data "gui.py;." `
           --add-data "$TTS_VERSION_PATH;TTS" `
           --add-data "$TRAINER_VERSION_PATH;trainer" `
@@ -102,11 +101,14 @@ jobs:
           --hidden-import=TTS.api `
           --hidden-import=TTS.tts.configs `
           --runtime-hook disable_torch_jit.py `
-          bootstrap.py
+          main.py
         shell: pwsh
       
       - name: Debug Tkinter Installation
         run: python -c "import tkinter; print('Tkinter is installed')"
+
+      - name: Debug TTS Installation
+        run: python -c "import TTS; print('TTS is installed')"
 
       - name: Package application into ZIP
         run: |
