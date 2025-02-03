@@ -98,7 +98,7 @@ jobs:
           --hidden-import=TTS.api `
           --hidden-import=TTS.tts.configs `
           --runtime-hook disable_torch_jit.py `
-          main.py
+          bootstrap.py
         shell: pwsh
       
       - name: Debug Tkinter Installation
