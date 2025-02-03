@@ -44,6 +44,15 @@ jobs:
           pip install torch torchaudio torchvision
           pip install librosa trainer
           pip install TTS
+     
+      - name: Create Runtime Hook File
+        shell: pwsh
+        run: |
+          Set-Content -Path "disable_torch_jit.py" -Value @"
+          import torch
+          torch._C._jit_set_profiling_executor(False)
+          torch._C._jit_set_profiling_mode(False)
+          "@
 
       - name: Build binary with PyInstaller (non-single file)
         run: |
