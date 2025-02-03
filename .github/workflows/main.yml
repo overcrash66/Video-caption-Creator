@@ -63,6 +63,7 @@ jobs:
           pyinstaller --noconfirm --name Video-Caption-Creator `
           --add-data "utils;utils" `
           --add-data "processors;processors" `
+          --add-data "main.py;." `
           --add-data "gui.py;." `
           --add-data "$TTS_VERSION_PATH;TTS" `
           --add-data "$TRAINER_VERSION_PATH;trainer" `
@@ -98,7 +99,7 @@ jobs:
           --hidden-import=TTS.api `
           --hidden-import=TTS.tts.configs `
           --runtime-hook disable_torch_jit.py `
-          main.py
+          bootstrap.py
         shell: pwsh
       
       - name: Debug Tkinter Installation
