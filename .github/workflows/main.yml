@@ -88,6 +88,7 @@ jobs:
           --hidden-import=TTS `
           --hidden-import=TTS.api `
           --hidden-import=TTS.tts.configs `
+          --runtime-hook disable_torch_jit.py `
           main.py
         shell: pwsh
       
