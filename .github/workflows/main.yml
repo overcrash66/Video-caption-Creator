@@ -63,7 +63,6 @@ jobs:
           pyinstaller --noconfirm --name Video-Caption-Creator `
           --add-data "utils;utils" `
           --add-data "processors;processors" `
-          --add-data "main.py;." `
           --add-data "gui.py;." `
           --add-data "$TTS_VERSION_PATH;TTS" `
           --add-data "$TRAINER_VERSION_PATH;trainer" `
