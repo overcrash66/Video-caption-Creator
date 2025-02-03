@@ -101,9 +101,6 @@ jobs:
         run: |
           mkdir release
           xcopy /E /I dist\Video-Caption-Creator release\  # Copy built app
-          xcopy /E /I utils release\utils\                 # Copy utils folder
-          xcopy /E /I processors release\processors\       # Copy processors folder
-          copy gui.py release\                             # Copy gui.py
           cd release && powershell -Command "Compress-Archive -Path * -DestinationPath Video-Caption-Creator.zip" && cd ..
 
       - name: Determine tag name
