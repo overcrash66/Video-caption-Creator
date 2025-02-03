@@ -11,6 +11,9 @@ from pydub import AudioSegment
 from TTS.utils.manage import ModelManager
 manager = ModelManager()
 torch.jit.enable_onednn_fusion(False)
+torch._C._jit_set_profiling_executor(False)
+torch._C._jit_set_profiling_mode(False)
+os.environ["TORCH_JIT"] = "0"
                                
 class SubToAudio:
 
