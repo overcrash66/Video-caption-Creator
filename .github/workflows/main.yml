@@ -60,7 +60,7 @@ jobs:
           $TRAINER_VERSION_PATH = python -c "import trainer, os; print(os.path.dirname(trainer.__file__))"
           $torchPath = python -c "import torch, os; print(os.path.dirname(torch.__file__))"
           Write-Host "Torch path: $torchPath"
-          pyinstaller --collect-all TTS --name Video-Caption-Creator `
+          pyinstaller --additional-hooks-dir=. --name Video-Caption-Creator `
           --add-data "utils;utils" `
           --add-data "processors;processors" `
           --add-data "gui.py;." `
@@ -100,6 +100,15 @@ jobs:
           --hidden-import=TTS `
           --hidden-import=TTS.api `
           --hidden-import=TTS.tts.configs `
+          --hidden-import=engineio.async_drivers.threading `
+          --hidden-import=TTS.utils.audio.numpy_transforms `
+          --hidden-import=TTS.tts.models.vits `
+          --hidden-import=TTS.vocoder.models.hifigan_generator `
+          --hidden-import=TTS.config.shared_configs `
+          --hidden-import=TTS.tts.utils.helpers `
+          --hidden-import=sklearn.utils._weight_vector `
+          --hidden-import=sklearn.neighbors._typedefs `
+          --hidden-import=sklearn.neighbors._quad_tree `
           --runtime-hook disable_torch_jit.py `
           main.py
         shell: pwsh
@@ -107,9 +116,15 @@ jobs:
       - name: Debug Tkinter Installation
         run: python -c "import tkinter; print('Tkinter is installed')"
 
-      - name: Debug TTS Installation
-        run: python -c "import TTS; print('TTS is installed')"
-
+      - name: Verify TTS Installation
+        run: |
+          python -c "import TTS; print('TTS Path:', TTS.__path__)"
+          python -c "from TTS.api import TTS; print('TTS API loaded successfully')"
+      
+      - name: Download TTS Models
+        run: |
+          python -c "from TTS.api import TTS; TTS('tts_models/multilingual/multi-dataset/xtts_v2').download_model()"
+          
       - name: Package application into ZIP
         run: |
           mkdir release
