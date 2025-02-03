@@ -97,8 +97,8 @@ jobs:
           --hidden-import=torch.utils `
           --hidden-import=torch.jit `
           --hidden-import=librosa `
-          --hidden-import=inflect
-          --hidden-import=typeguard
+          --hidden-import=inflect `
+          --hidden-import=typeguard `
           --hidden-import=TTS `
           --hidden-import=TTS.api `
           --hidden-import=TTS.tts.configs `
