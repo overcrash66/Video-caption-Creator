@@ -49,12 +49,15 @@ jobs:
         run: |
           $TTS_VERSION_PATH = python -c "import TTS, os; print(os.path.join(TTS.__path__[0], 'VERSION'))"
           $TRAINER_VERSION_PATH = python -c "import trainer, os; print(os.path.join(trainer.__path__[0], 'VERSION'))"
+          $torchPath = python -c "import torch, os; print(os.path.abspath(os.path.dirname(torch.__file__)))"
+          Write-Host "Torch path: $torchPath"
           pyinstaller --noconfirm --name Video-Caption-Creator `
           --add-data "utils;utils" `
           --add-data "processors;processors" `
           --add-data "gui.py;." `
           --add-data "$TTS_VERSION_PATH;TTS" `
           --add-data "$TRAINER_VERSION_PATH;trainer" `
+          --add-data "$torchPath;torch" `
           --hidden-import=tkinter `
           --hidden-import=_tkinter `
           --hidden-import=tkinter.ttk `
