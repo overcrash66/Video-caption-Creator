@@ -108,9 +108,6 @@ jobs:
       - name: Debug Tkinter Installation
         run: python -c "import tkinter; print('Tkinter is installed')"
 
-      - name: Debug PyInstaller Output
-        run: dir dist\Video-Caption-Creator
-
       - name: Package application into ZIP
         run: |
           mkdir release
