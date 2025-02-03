@@ -122,13 +122,17 @@ jobs:
           python -c "from TTS.api import TTS; print('TTS API loaded successfully')"
       
       - name: Download TTS Models
+        shell: pwsh
         run: |
-          python -c "from TTS.api import TTS; TTS('tts_models/multilingual/multi-dataset/xtts_v2').download_model()"
-          
+          # Auto-accept CPML license non-interactively
+          $Response = "y"
+          $Response | python -c "from TTS.api import TTS; TTS('tts_models/multilingual/multi-dataset/xtts_v2').download_model()"
+            
       - name: Package application into ZIP
         run: |
           mkdir release
           xcopy /E /I dist\Video-Caption-Creator release\  # Copy built app
+          xcopy /E /I models\xtts_v2 C:\Users\runneradmin\.local\share\tts\tts_models--multilingual--multi-dataset--xtts_v2\
           cd release && powershell -Command "Compress-Archive -Path * -DestinationPath Video-Caption-Creator.zip" && cd ..
 
       - name: Determine tag name
