@@ -56,11 +56,11 @@ jobs:
 
       - name: Build binary with PyInstaller (non-single file)
         run: |
-          $TTS_VERSION_PATH = python -c "import TTS, os; print(os.path.join(TTS.__path__[0], 'VERSION'))"
-          $TRAINER_VERSION_PATH = python -c "import trainer, os; print(os.path.join(trainer.__path__[0], 'VERSION'))"
-          $torchPath = python -c "import torch, os; print(os.path.abspath(os.path.dirname(torch.__file__)))"
+          $TTS_VERSION_PATH = python -c "import TTS, os; print(os.path.dirname(TTS.__file__))"
+          $TRAINER_VERSION_PATH = python -c "import trainer, os; print(os.path.dirname(trainer.__file__))"
+          $torchPath = python -c "import torch, os; print(os.path.dirname(torch.__file__))"
           Write-Host "Torch path: $torchPath"
-          pyinstaller --noconfirm --name Video-Caption-Creator `
+          pyinstaller --additional-hooks-dir=. --onefile --name Video-Caption-Creator `
           --add-data "utils;utils" `
           --add-data "processors;processors" `
            --add-data "main.py;." `
@@ -68,7 +68,10 @@ jobs:
           --add-data "$TTS_VERSION_PATH;TTS" `
           --add-data "$TRAINER_VERSION_PATH;trainer" `
           --add-data "$torchPath;torch" `
+          --add-binary "$torchPath\lib\*.dll;torch\lib" `
           --hidden-import=tkinter `
+          --collect-submodules TTS `
+          --collect-submodules torch `
           --hidden-import=_tkinter `
           --hidden-import=tkinter.ttk `
           --hidden-import=tkinter.filedialog `
