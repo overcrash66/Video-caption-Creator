@@ -10,12 +10,6 @@ from TTS.api import TTS
 from pydub import AudioSegment
 from TTS.utils.manage import ModelManager
 manager = ModelManager()
-
-try:
-    torch._C._jit_set_profiling_executor(False)
-    torch._C._jit_set_profiling_mode(False)
-except Exception as e:
-    print("Warning: unable to disable torch JIT profiling:", e)
                                
 class SubToAudio:
 
