@@ -67,10 +67,13 @@ jobs:
           --add-data "$TTS_VERSION_PATH;TTS" `
           --add-data "$TRAINER_VERSION_PATH;trainer" `
           --add-data "$torchPath;torch" `
+          --add-data "$env:PYTHONPATH\Lib\site-packages\inflect;inflect" `
+          --add-data "$env:PYTHONPATH\Lib\site-packages\typeguard;typeguard" `
           --add-binary "$torchPath\lib\*.dll;torch\lib" `
           --hidden-import=tkinter `
           --collect-submodules TTS `
           --collect-submodules torch `
+          --collect-submodules inflect `
           --hidden-import=_tkinter `
           --hidden-import=tkinter.ttk `
           --hidden-import=tkinter.filedialog `
@@ -97,8 +100,8 @@ jobs:
           --hidden-import=torch.utils `
           --hidden-import=torch.jit `
           --hidden-import=librosa `
-          --hidden-import=inflect `
-          --hidden-import=typeguard `
+          --hidden-import=inflect,typeguard,_typeshed `
+          --hidden-import=typeguard._decorators,typeguard._importhook `
           --hidden-import=TTS `
           --hidden-import=TTS.api `
           --hidden-import=TTS.tts.configs `
