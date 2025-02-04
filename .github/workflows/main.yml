@@ -138,6 +138,13 @@ jobs:
       
       - name: Create release directory
         run: mkdir release
+
+      - name: Clean build artifacts
+        run: |
+          # Remove development-only files
+          Remove-Item -Recurse -Force dist/Video-Caption-Creator/*.pdb
+          Remove-Item -Recurse -Force dist/Video-Caption-Creator/torch/lib/*.a
+          Remove-Item -Recurse -Force dist/Video-Caption-Creator/torch/include/*
       
       - name: Package application into ZIP
         run: |
