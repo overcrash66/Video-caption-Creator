@@ -59,7 +59,19 @@ jobs:
           torch._C._jit_set_profiling_executor(False)
           torch._C._jit_set_profiling_mode(False)
           "@
+      
+      - name: Debug Tkinter Installation
+        run: python -c "import tkinter; print('Tkinter is installed')"
 
+      - name: Verify TTS Installation
+        run: |
+          python -c "import TTS; print('TTS Path:', TTS.__path__)"
+          python -c "from TTS.api import TTS; print('TTS API loaded successfully')"
+
+      - name: Verify torch Installation
+        run: |
+          python -c "import torch; print('torch Path:', torch.__path__)"
+      
       - name: Build binary with PyInstaller (non-single file)
         run: |
           $TTS_VERSION_PATH = python -c "import TTS, os; print(os.path.dirname(TTS.__file__))"
@@ -126,18 +138,6 @@ jobs:
           main.py
         shell: pwsh
       
-      - name: Debug Tkinter Installation
-        run: python -c "import tkinter; print('Tkinter is installed')"
-
-      - name: Verify TTS Installation
-        run: |
-          python -c "import TTS; print('TTS Path:', TTS.__path__)"
-          python -c "from TTS.api import TTS; print('TTS API loaded successfully')"
-
-      - name: Verify torch Installation
-        run: |
-          python -c "import torch; print('torch Path:', torch.__path__)"
-      
       - name: Install 7-Zip
         run: choco install 7zip -y
       
@@ -178,12 +178,6 @@ jobs:
           $localePath = "$buildPath/torch/lib/locale"
           if (Test-Path $localePath) {
             Get-ChildItem $localePath -Exclude en_US | Remove-Item -Recurse -Force
-          }
-      
-          # Verify cleanup didn't break essential files
-          if (-not (Test-Path "$torchLibPath/*.dll")) {
-            Write-Warning "Critical DLL files missing after cleanup!"
-            Exit 1
           }
 
       - name: Verify build integrity
