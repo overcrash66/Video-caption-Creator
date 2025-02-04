@@ -140,11 +140,46 @@ jobs:
         run: mkdir release
 
       - name: Clean build artifacts
+        shell: pwsh
         run: |
-          # Remove development-only files
-          Remove-Item -Recurse -Force dist/Video-Caption-Creator/*.pdb
-          Remove-Item -Recurse -Force dist/Video-Caption-Creator/torch/lib/*.a
-          Remove-Item -Recurse -Force dist/Video-Caption-Creator/torch/include/*
+          $buildPath = "dist/Video-Caption-Creator"
+          
+          # Remove debug symbols (if present)
+          if (Test-Path "$buildPath/*.pdb") {
+            Remove-Item -Path "$buildPath/*.pdb" -Force
+          }
+      
+          # Clean Torch binaries more safely
+          $torchLibPath = "$buildPath/torch/lib"
+          if (Test-Path $torchLibPath) {
+            # Remove static libraries but keep DLLs
+            Remove-Item -Path "$torchLibPath/*.a" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$torchLibPath/*.lib" -Force -ErrorAction SilentlyContinue
+            
+            # Remove unnecessary CUDA files if present
+            $cudaPaths = @("$torchLibPath/bin", "$torchLibPath/include", "$torchLibPath/share")
+            $cudaPaths | ForEach-Object {
+              if (Test-Path $_) {
+                Remove-Item -Path $_ -Recurse -Force -ErrorAction SilentlyContinue
+              }
+            }
+          }
+      
+          # Clean Python cached files
+          Get-ChildItem -Path $buildPath -Recurse -Include __pycache__, *.pyc, *.pyo |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+      
+          # Optional: Remove locale data if not needed
+          $localePath = "$buildPath/torch/lib/locale"
+          if (Test-Path $localePath) {
+            Get-ChildItem $localePath -Exclude en_US | Remove-Item -Recurse -Force
+          }
+      
+          # Verify cleanup didn't break essential files
+          if (-not (Test-Path "$torchLibPath/*.dll")) {
+            Write-Warning "Critical DLL files missing after cleanup!"
+            Exit 1
+          }
       
       - name: Package application into ZIP
         run: |
