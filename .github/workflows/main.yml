@@ -133,11 +133,15 @@ jobs:
           python -c "import TTS; print('TTS Path:', TTS.__path__)"
           python -c "from TTS.api import TTS; print('TTS API loaded successfully')"
       
+      - name: Install 7-Zip
+        run: choco install 7zip -y
+      
+      - name: Create release directory
+        run: mkdir release
+      
       - name: Package application into ZIP
         run: |
-          mkdir release
-          xcopy /E /I dist\Video-Caption-Creator release\  # Copy built app
-          cd release && powershell -Command "Compress-Archive -Path * -DestinationPath Video-Caption-Creator.zip" && cd ..
+          7z a -tzip release/Video-Caption-Creator.zip .\dist\Video-Caption-Creator\
 
       - name: Determine tag name
         id: tag_name
