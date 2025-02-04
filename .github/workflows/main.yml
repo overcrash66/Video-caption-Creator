@@ -182,7 +182,7 @@ jobs:
 
       - name: Verify build integrity
         run: |
-          python -c "import sys; sys.exit(0 if (len(os.listdir('dist/Video-Caption-Creator')) > 50) else 1)"  
+          python -c "import sys, os; sys.exit(0 if (len(os.listdir('dist/Video-Caption-Creator')) > 50) else 1)"  
       
       - name: Package application into ZIP
         run: |
