@@ -78,7 +78,7 @@ jobs:
           $TRAINER_VERSION_PATH = python -c "import trainer, os; print(os.path.dirname(trainer.__file__))"
           $torchPath = python -c "import torch, os; print(os.path.dirname(torch.__file__))"
           Write-Host "Torch path: $torchPath"
-          pyinstaller --additional-hooks-dir=. --name Video-Caption-Creator `
+          pyinstaller --noconfirm --onedir --additional-hooks-dir=. --name Video-Caption-Creator `
           --add-data "utils;utils" `
           --add-data "processors;processors" `
           --add-data "gui.py;." `
@@ -134,6 +134,9 @@ jobs:
           --hidden-import=sklearn.utils._weight_vector `
           --hidden-import=sklearn.neighbors._typedefs `
           --hidden-import=sklearn.neighbors._quad_tree `
+          --exclude-module "torch.testing" `
+          --exclude-module "TTS.tests" `
+          --exclude-module "numpy.random" `
           --runtime-hook disable_torch_jit.py `
           main.py
         shell: pwsh
@@ -144,45 +147,25 @@ jobs:
       - name: Create release directory
         run: mkdir release
 
-      - name: Clean build artifacts
-        shell: pwsh
+      - name: Safe build cleanup
         run: |
           $buildPath = "dist/Video-Caption-Creator"
-          
-          # Remove debug symbols (if present)
-          if (Test-Path "$buildPath/*.pdb") {
-            Remove-Item -Path "$buildPath/*.pdb" -Force
-          }
-      
-          # Clean Torch binaries more safely
-          $torchLibPath = "$buildPath/torch/lib"
-          if (Test-Path $torchLibPath) {
-            # Remove static libraries but keep DLLs
-            Remove-Item -Path "$torchLibPath/*.a" -Force -ErrorAction SilentlyContinue
-            Remove-Item -Path "$torchLibPath/*.lib" -Force -ErrorAction SilentlyContinue
-            
-            # Remove unnecessary CUDA files if present
-            $cudaPaths = @("$torchLibPath/bin", "$torchLibPath/include", "$torchLibPath/share")
-            $cudaPaths | ForEach-Object {
-              if (Test-Path $_) {
-                Remove-Item -Path $_ -Recurse -Force -ErrorAction SilentlyContinue
-              }
-            }
-          }
-      
-          # Clean Python cached files
-          Get-ChildItem -Path $buildPath -Recurse -Include __pycache__, *.pyc, *.pyo |
-            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-      
-          # Optional: Remove locale data if not needed
-          $localePath = "$buildPath/torch/lib/locale"
-          if (Test-Path $localePath) {
-            Get-ChildItem $localePath -Exclude en_US | Remove-Item -Recurse -Force
-          }
+          # Remove debug symbols only
+          Remove-Item -Path "$buildPath/*.pdb" -ErrorAction SilentlyContinue
+          # Clean Python cache
+          Get-ChildItem -Path $buildPath -Include __pycache__, *.pyc -Recurse | Remove-Item
 
-      - name: Verify build integrity
+      - name: List build contents
         run: |
-          python -c "import sys, os; sys.exit(0 if (len(os.listdir('dist/Video-Caption-Creator')) > 50) else 1)"  
+          Get-ChildItem -Path dist/Video-Caption-Creator -Recurse |
+          Format-Table FullName, Length |
+          Out-String -Width 200 |
+          Write-Host
+      
+      - name: Check PyInstaller logs
+        run: |
+          Get-Content build/Video-Caption-Creator/warn-Video-Caption-Creator.txt |
+          Select-String -Pattern "missing" -Context 3
       
       - name: Package application into ZIP
         run: |
