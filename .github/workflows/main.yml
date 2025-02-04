@@ -147,13 +147,35 @@ jobs:
       - name: Create release directory
         run: mkdir release
 
-      - name: Safe build cleanup
+      - name: Clean build artifacts
+        shell: pwsh
         run: |
           $buildPath = "dist/Video-Caption-Creator"
-          # Remove debug symbols only
-          Remove-Item -Path "$buildPath/*.pdb" -ErrorAction SilentlyContinue
-          # Clean Python cache
-          Get-ChildItem -Path $buildPath -Include __pycache__, *.pyc -Recurse | Remove-Item
+          
+          if (Test-Path $buildPath) {
+              # Remove Python cache files safely
+              $cacheItems = Get-ChildItem -Path $buildPath -Include __pycache__, *.pyc, *.pyo -Recurse -ErrorAction SilentlyContinue
+              if ($cacheItems) {
+                  Write-Host "Cleaning up $($cacheItems.Count) cache files"
+                  $cacheItems | Remove-Item -Recurse -Force -ErrorAction Continue
+              }
+              else {
+                  Write-Host "No cache files found to clean"
+              }
+      
+              # Remove PDB files if present
+              $pdbFiles = Get-ChildItem -Path $buildPath -Filter *.pdb -Recurse -ErrorAction SilentlyContinue
+              if ($pdbFiles) {
+                  Write-Host "Removing $($pdbFiles.Count) debug symbols"
+                  $pdbFiles | Remove-Item -Force -ErrorAction Continue
+              }
+          }
+          else {
+              Write-Error "Build directory missing: $buildPath"
+              Exit 1
+          }
+          
+          Write-Host "Cleanup completed successfully"
 
       - name: List build contents
         run: |
