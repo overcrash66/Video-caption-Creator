@@ -25,7 +25,13 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
+     
+      - name: Fix Python Paths
+        run: |
+          $pythonPath = python -c "import sys; print(sys.prefix)"
+          $env:PYTHONPATH = "$pythonPath\Lib\site-packages"
+          echo "PYTHONPATH set to: $env:PYTHONPATH"
+    
       - name: Cache pip dependencies
         uses: actions/cache@v3
         with:
@@ -44,7 +50,13 @@ jobs:
           pip install torch==2.5.0 torchaudio==2.5.0 torchvision==0.20.0
           pip install librosa trainer
           pip install TTS
-     
+          pip install inflect==6.0.4
+      
+      - name: Verify inflect Installation
+        run: |
+          python -c "import inflect; print('Inflect path:', inflect.__file__)"
+          dir "$(python -c 'import inflect, os; print(os.path.dirname(inflect.__file__))')"
+          
       - name: Create Runtime Hook File
         shell: pwsh
         run: |
@@ -67,13 +79,14 @@ jobs:
           --add-data "$TTS_VERSION_PATH;TTS" `
           --add-data "$TRAINER_VERSION_PATH;trainer" `
           --add-data "$torchPath;torch" `
-          --add-data "$env:PYTHONPATH\Lib\site-packages\inflect;inflect" `
-          --add-data "$env:PYTHONPATH\Lib\site-packages\typeguard;typeguard" `
+          --add-data "$(python -c 'import inflect, os; print(os.path.dirname(inflect.__file__))');inflect" `
+          --add-data "$(python -c 'import typeguard, os; print(os.path.dirname(typeguard.__file__))');typeguard" `
           --add-binary "$torchPath\lib\*.dll;torch\lib" `
           --hidden-import=tkinter `
           --collect-submodules TTS `
           --collect-submodules torch `
           --collect-submodules inflect `
+          --collect-submodules typeguard `
           --hidden-import=_tkinter `
           --hidden-import=tkinter.ttk `
           --hidden-import=tkinter.filedialog `
@@ -102,6 +115,7 @@ jobs:
           --hidden-import=librosa `
           --hidden-import=inflect,typeguard,_typeshed `
           --hidden-import=typeguard._decorators,typeguard._importhook `
+          --hidden-import=inflect.engine,typeguard._importhook `
           --hidden-import=TTS `
           --hidden-import=TTS.api `
           --hidden-import=TTS.tts.configs `
