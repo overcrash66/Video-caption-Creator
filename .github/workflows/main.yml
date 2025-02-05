@@ -211,4 +211,4 @@ jobs:
           tag_name: ${{ steps.tag_name.outputs.TAG_NAME }}
           name: Release ${{ steps.tag_name.outputs.TAG_NAME }}
           files: |
-            release/Video-Caption-Creator.zip
+            release/Video-Caption-Creator.7z
