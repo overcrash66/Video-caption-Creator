@@ -1,7 +1,7 @@
 # Video caption Creator
 
 The Video Caption Creator is a Python program designed to generate captioned videos using SRT files. 
-It supports generating speech or audio from SRT files, as well as merging and synchronizing video with audio
+It supports generating speech or audio from SRT files, as well as merging and synchronizing video with audio.
 
 ### Captivating captions
 
@@ -10,9 +10,9 @@ This means you can highlight specific words, change formatting, and make your su
 
 Key styling options include:
 
-    Custom fonts
-    Font style, size, and color
-    Additional text formatting for emphasis
+* Custom fonts
+* Font style, size, and color
+* Additional text formatting for emphasis
 
 [![VcC](https://img.youtube.com/vi/rjFq3P9vhHs/0.jpg)](https://www.youtube.com/watch?v=rjFq3P9vhHs)
 
@@ -47,12 +47,12 @@ pip install torch==2.5.1+cu118 torchaudio==2.5.1+cu118 --index-url https://downl
 
 You can run the GUI with `python main.py`.
 
-![flowchart](image/flowchart.png)
-![Demo](image/App.png)
+![flowchart](./image/flowchart.png)
+![Demo](./image/App.png)
 
 ## Unit Tests
 
-Install tesseract
+Install tesseract from [UB-Mannheim's tesseract installer](https://github.com/UB-Mannheim/tesseract/wiki)
 
 ```
 https://github.com/UB-Mannheim/tesseract/wiki
@@ -61,7 +61,7 @@ https://github.com/UB-Mannheim/tesseract/wiki
 Install unit tests requirements
 
 ```
-pip install test-requirements.txt
+pip install -r test-requirements.txt
 ```
 
 Run tests
