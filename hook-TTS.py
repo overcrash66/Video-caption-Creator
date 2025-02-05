@@ -23,7 +23,9 @@ typeguard_datas = collect_data_files('typeguard')
 torch_datas = collect_data_files('torch')
 #add numpy
 numpy_datas = collect_data_files('numpy')
+gruut_datas = collect_data_files('gruut')
 
-datas = infl_datas + tts_datas + typeguard_datas + torch_datas + numpy_datas
+tensorflow_datas = collect_data_files('tensorflow')
+datas = infl_datas + tts_datas + typeguard_datas + torch_datas + numpy_datas + tensorflow_datas + gruut_datas
 binaries = infl_binaries + tts_binaries
-hiddenimports = infl_hiddenimports + tts_hiddenimports + collect_submodules('TTS') + ['typeguard._decorators', 'typeguard._importhook']
+hiddenimports = infl_hiddenimports + tts_hiddenimports + collect_submodules('TTS') + collect_submodules('tensorflow') + ['typeguard._decorators', 'typeguard._importhook']
