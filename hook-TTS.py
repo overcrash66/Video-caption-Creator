@@ -21,7 +21,9 @@ infl_datas, infl_binaries, infl_hiddenimports = collect_all('inflect')
 tts_datas, tts_binaries, tts_hiddenimports = collect_all('TTS')
 typeguard_datas = collect_data_files('typeguard')
 torch_datas = collect_data_files('torch')
+#add numpy
+numpy_datas = collect_data_files('numpy')
 
-datas = infl_datas + tts_datas + typeguard_datas
+datas = infl_datas + tts_datas + typeguard_datas + torch_datas + numpy_datas
 binaries = infl_binaries + tts_binaries
 hiddenimports = infl_hiddenimports + tts_hiddenimports + collect_submodules('TTS') + ['typeguard._decorators', 'typeguard._importhook']
