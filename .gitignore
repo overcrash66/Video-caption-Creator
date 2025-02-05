@@ -7,3 +7,5 @@
 /.cache
 venv/
 __pycache__/
+video_gen_temp/
+test_dir/
