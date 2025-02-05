@@ -45,6 +45,7 @@ jobs:
           pip install librosa trainer
           pip install "inflect<6.0" "pydantic<2.0"
           pip install pyinstaller-hooks-contrib
+          pip install numpy
       
       - name: Verify inflect Installation
         run: |
@@ -136,8 +137,9 @@ jobs:
           --hidden-import=sklearn.neighbors._quad_tree `
           --exclude-module "torch.testing" `
           --exclude-module "TTS.tests" `
-          --exclude-module "numpy.random" `
-          --runtime-hook disable_torch_jit.py `
+          --hidden-import "numpy" `
+          --hidden-import "numpy.random" `
+          --exclude-module "numpy._pytest" `
           main.py
         shell: pwsh
       
