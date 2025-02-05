@@ -139,7 +139,3 @@ This project utilizes XTTS v2 from Coqui AI for text-to-speech generation. Users
     * Generating misleading/deceptive content
     * Impersonating individuals without consent
     * Creating content violating human rights principles
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
