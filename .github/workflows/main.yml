@@ -72,42 +72,29 @@ jobs:
         run: |
           python -c "import torch; print('torch Path:', torch.__path__)"
       
-      - name: Build binary with PyInstaller (non-single file)
+      - name: Build binary with PyInstaller
+        shell: pwsh
         run: |
-          $TTS_VERSION_PATH = python -c "import TTS, os; print(os.path.dirname(TTS.__file__))"
-          $TRAINER_VERSION_PATH = python -c "import trainer, os; print(os.path.dirname(trainer.__file__))"
-          $torchPath = python -c "import torch, os; print(os.path.dirname(torch.__file__))"
-          Write-Host "Torch path: $torchPath"
-          pyinstaller --noconfirm --onedir --name Video-Caption-Creator `
-          --additional-hooks-dir=. `
-          --paths $env:PYTHONPATH `
-          # Core application files
-          --add-data "utils;utils" `
-          --add-data "processors;processors" `
-          --add-data "gui.py;." `
-          # Package data using module hooks
-          --collect-data TTS `
-          --collect-data torch `
-          --collect-data inflect `
-          --collect-data typeguard `
-          # Binary dependencies
-          --add-binary "$(python -c 'import torch; print(torch.__file__.replace("__init__.py", "lib/*.dll"))');torch/lib" `
-          # Critical hidden imports
-          --hidden-import=`
-              tkinter,_tkinter,ttk,filedialog,messagebox,colorchooser,`
-              PIL.Image,PIL.ImageDraw,PIL.ImageFont,PIL.ImageColor,PIL.ImageOps,PIL.ImageTk,`
-              pydub,ffmpeg,librosa,concurrent.futures,`
-              sklearn.utils._weight_vector,sklearn.neighbors._typedefs,sklearn.neighbors._quad_tree,`
-              TTS.api,TTS.tts.configs.vits_config,TTS.utils.synthesizer,`
-              engineio.async_drivers.threading,typeguard._decorators,inflect.engine `
-          # Optimizations
-          --exclude-module "torch.testing" `
-          --exclude-module "TTS.tests" `
-          --exclude-module "numpy.tests" `
-          --exclude-module "unittest" `
-          --runtime-hook disable_torch_jit.py `
-          # Entry point
-          main.py
+          pyinstaller --noconfirm --onedir `
+            --additional-hooks-dir=. `
+            --name Video-Caption-Creator `
+            --add-data "utils;utils" `
+            --add-data "processors;processors" `
+            --add-data "gui.py;." `
+            --add-data "$(python -c 'import TTS, os; print(os.path.dirname(TTS.__file__))');TTS" `
+            --add-data "$(python -c 'import trainer, os; print(os.path.dirname(trainer.__file__))');trainer" `
+            --add-data "$(python -c 'import torch, os; print(os.path.dirname(torch.__file__))');torch" `
+            --add-data "$(python -c 'import inflect, os; print(os.path.dirname(inflect.__file__))');inflect" `
+            --add-data "$(python -c 'import typeguard, os; print(os.path.dirname(typeguard.__file__))');typeguard" `
+            --add-binary "$(python -c 'import torch; torch_path=os.path.dirname(torch.__file__); print(os.path.join(torch_path, \"lib\", \"*.dll\"))');torch/lib" `
+            --hidden-import @("tkinter","_tkinter","ttk","filedialog","messagebox","colorchooser",
+              "PIL.Image","PIL.ImageDraw","PIL.ImageFont","PIL.ImageColor","PIL.ImageOps","PIL.ImageTk",
+              "pydub","ffmpeg","concurrent.futures","librosa","sklearn.utils._weight_vector",
+              "sklearn.neighbors._typedefs","sklearn.neighbors._quad_tree","TTS.api","TTS.tts.configs.vits_config",
+              "engineio.async_drivers.threading","typeguard._decorators","inflect.engine") `
+            --exclude-module @("torch.testing","TTS.tests","numpy.tests") `
+            --runtime-hook disable_torch_jit.py `
+            main.py
       
       - name: Install 7-Zip
         run: choco install 7zip -y
