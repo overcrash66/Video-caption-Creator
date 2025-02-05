@@ -46,6 +46,7 @@ jobs:
           pip install "inflect<6.0" "pydantic<2.0"
           pip install pyinstaller-hooks-contrib
           pip install numpy
+          pip install gruut
       
       - name: Verify inflect Installation
         run: |
@@ -88,12 +89,14 @@ jobs:
           --add-data "$torchPath;torch" `
           --add-data "$(python -c 'import inflect, os; print(os.path.dirname(inflect.__file__))');inflect" `
           --add-data "$(python -c 'import typeguard, os; print(os.path.dirname(typeguard.__file__))');typeguard" `
+          --add-data "$(python -c 'import gruut, os; print(os.path.dirname(gruut.__file__))');gruut" `
           --add-binary "$torchPath\lib\*.dll;torch\lib" `
           --hidden-import=tkinter `
           --collect-submodules TTS `
           --collect-all torch `
           --collect-submodules inflect `
           --collect-submodules typeguard `
+          --collect-submodules gruut `
           --hidden-import=_tkinter `
           --hidden-import=tkinter.ttk `
           --hidden-import=tkinter.filedialog `
