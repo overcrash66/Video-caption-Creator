@@ -1,7 +1,7 @@
 # Video Caption Creator 🎥🔊
 > A Python-powered tool for automated video captioning and audio/video synchronization. Enhance your video content with smart captioning and audio synchronization features.
 
-![GitHub License](LICENSE)
+![GitHub License](https://img.shields.io/github/LICENSE/overcrash66/Video-caption-Creator)
 ![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
