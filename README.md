@@ -102,10 +102,6 @@ You can run the GUI with `python main.py`.
 
 Install tesseract from [UB-Mannheim's tesseract installer](https://github.com/UB-Mannheim/tesseract/wiki)
 
-```
-https://github.com/UB-Mannheim/tesseract/wiki
-```
-
 Install unit tests requirements
 
 ```
