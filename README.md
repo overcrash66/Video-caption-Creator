@@ -27,7 +27,7 @@ Designed to streamline workflows for video production, language localization, an
 
     * Batch Processing: Handle multiple files and formats in single operations
 
-    * Format Flexibility: Supports common video formats (MP4, MOV, AVI) and audio formats (WAV, MP3)
+    * Format Flexibility: Supports common audio formats (WAV, MP3)
 
 ## Ideal For 💡
 
@@ -62,9 +62,9 @@ In content creation workflows, manually synchronizing audio with captions can co
 For windows users:
 Download 7z file from [here](https://github.com/overcrash66/Video-caption-Creator/releases/download/v1.0.0/Video-Caption-Creator.7z)
 
-extract and execute Video-Caption-Creator.exe
+Extract and execute Video-Caption-Creator.exe
 
-or
+Or
 
 * Clone or download this repository
 
@@ -126,7 +126,6 @@ This project utilizes XTTS v2 from Coqui AI for text-to-speech generation. Users
   * XTTS v2 is licensed under:
     * CC BY-NC-ND 4.0 for the pre-trained models
     * Apache 2.0 for the codebase
-    * Full license details: Coqui AI Model License
 
 * Commercial Use Restrictions ❗
   * The XTTS v2 model weights are non-commercial use only under CC BY-NC-ND 4.0. For commercial applications:
