@@ -15,15 +15,18 @@ class VideoProcessor:
         self.settings = settings.copy()
         self.process_dir = self.temp_manager.process_dir
         self.temp_dirs: List[str] = []  # Keep track of created process directories
-    
+
     def __del__(self):
         # Clean up all created temporary directories
         for temp_dir in self.temp_dirs:
-            try:
-                if os.path.exists(temp_dir):
-                    self.temp_manager.cleanup_dir(temp_dir)
-            except Exception as e:
-                logging.error(f"Error cleaning up temporary directory {temp_dir}: {str(e)}")
+            self.cleanup_temp_dir(temp_dir)
+
+    def cleanup_temp_dir(self, temp_dir: str):
+        try:
+            if os.path.exists(temp_dir):
+                self.temp_manager.cleanup_dir(temp_dir)
+        except Exception as e:
+            logging.error(f"Error cleaning up temporary directory {temp_dir}: {str(e)}")
 
     def calculate_adjusted_durations(self, frames: List[Dict], audio_duration: float) -> List[Dict]:
         """
@@ -31,32 +34,24 @@ class VideoProcessor:
         Ensures minimum duration and rounds to 3 decimal places for millisecond precision.
         """
         try:
-            # Calculate the total duration of all frames
             total_frame_duration = sum(frame.get('duration', 0) for frame in frames)
-
             if total_frame_duration <= 0:
                 logging.error("Total frame duration is zero or negative.")
                 return frames
 
-            # Calculate the scaling factor to match the audio duration
             scaling_factor = audio_duration / total_frame_duration
-
-            # Adjust the duration of each frame
             adjusted_frames = []
             accumulated_duration = 0
             min_duration = 0.033  # Minimum duration (about 1 frame at 30fps)
-            
+
             for i, frame in enumerate(frames):
                 adjusted_frame = frame.copy()
                 raw_duration = frame.get('duration', 0) * scaling_factor
-                
-                # Ensure minimum duration
                 duration = max(round(raw_duration, 3), min_duration)
-                
-                # Adjust last frame to match total duration exactly
+
                 if i == len(frames) - 1:
                     duration = round(audio_duration - accumulated_duration, 3)
-                
+
                 adjusted_frame['duration'] = duration
                 accumulated_duration += duration
                 adjusted_frames.append(adjusted_frame)
@@ -66,26 +61,46 @@ class VideoProcessor:
             logging.error(f"Error calculating adjusted durations: {str(e)}")
             return frames
 
+    def validate_image(self, image_path: str) -> bool:
+        """Validate image dimensions and color mode."""
+        try:
+            image = Image.open(image_path)
+            if image.size != (1280, 720):
+                logging.error("Invalid image dimensions.")
+                return False
+            if image.mode != 'RGB':
+                logging.error("Invalid color mode.")
+                return False
+            return True
+        except Exception as e:
+            logging.error(f"Error validating image {image_path}: {str(e)}")
+            return False
+
+    def validate_and_prepare_image(self, img_path: str, process_dir: str, batch_idx: int) -> str:
+        """Validate an image or replace it with a blank image if invalid."""
+        if not img_path or not os.path.exists(img_path) or not self.validate_image(img_path):
+            logging.error(f"Invalid image: {img_path}. Replacing with a blank image.")
+            img_path = os.path.join(process_dir, f"blank_{batch_idx:04d}.png")
+            Image.new('RGB', (1280, 720), (255, 255, 255)).save(img_path)
+        return img_path
+
     def process_images(self, images, output_path, audio_input: str = None):
         try:
-            # Adjust frame durations if audio is provided
             if audio_input:
                 audio_duration = self.get_audio_duration(audio_input)
                 if audio_duration > 0:
                     images = self.calculate_adjusted_durations(images, audio_duration)
 
             batch_size = max(len(images) // 10, 50)
-            batches = [images[i:i+batch_size] for i in range(0, len(images), batch_size)]
-            
-            # Pre-allocate segment list with original positions
+            batches = [images[i:i + batch_size] for i in range(0, len(images), batch_size)]
             segments = [None] * len(batches)
-            
+
             with ThreadPoolExecutor(max_workers=4) as executor:
                 future_map = {
                     executor.submit(self.process_batch, batch, idx): idx
                     for idx, batch in enumerate(batches)
                 }
-                
+
                 for future in as_completed(future_map):
                     batch_idx = future_map[future]
                     result = future.result()
@@ -95,37 +110,18 @@ class VideoProcessor:
                     else:
                         logging.error(f"Failed batch {batch_idx}")
 
-            # Filter and sort segments
             valid_segments = self._get_ordered_segments(segments)
-            
             if not valid_segments:
                 logging.error("No valid segments for final video")
                 return False
 
             return self.combine_segments(valid_segments, output_path, audio_input)
-        
+
         except Exception as e:
             logging.error(f"Video processing failed: {str(e)}")
             return False
 
-    def _get_ordered_segments(self, segments: list) -> list:
-        """Ensure proper segment ordering based on batch index."""
-        try:
-            # Remove failed batches
-            valid = [s for s in segments if s is not None]
-        
-            # Sort by batch index from filename
-            valid.sort(key=lambda x: int(os.path.basename(x).split('_')[1].split('.')[0]))
-            return valid
-        except Exception as e:
-            logging.error(f"Segment ordering failed: {str(e)}")
-            return []
-
-    def process(self, images: List[Dict], output_path: str) -> bool:
-        """Process a list of images into a video."""
-        return self.process_images(images, output_path)
-
-    def process_batch(self, batch: List[Dict], batch_idx: int) -> Optional[str]:  
+    def process_batch(self, batch: List[Dict], batch_idx: int) -> Optional[str]:
         process_dir = None
         list_file = None
         try:
@@ -133,32 +129,14 @@ class VideoProcessor:
                 logging.warning(f"Skipping empty batch {batch_idx}")
                 return None
 
-            # Add validation for image properties
-            first_image = Image.open(batch[0]['path'])
-            if first_image.size != (1280, 720):
-                logging.error("Invalid image dimensions in batch")
-                return None
-            if first_image.mode != 'RGB':
-                logging.error("Invalid color mode in images")
-                return None
-
             process_dir = self.temp_manager.create_process_dir()
             list_file = os.path.join(process_dir, f"input_{batch_idx}.txt")
-
             output_file = os.path.join(process_dir, f"batch_{batch_idx:04d}.mp4")
 
             with open(list_file, 'w', encoding='utf-8') as f:
                 for img in batch:
-                    img_path = img.get('path')
+                    img_path = self.validate_and_prepare_image(img.get('path'), process_dir, batch_idx)
                     duration = img.get('duration', 1.0)
-                
-                    if not img_path or not os.path.exists(img_path):
-                        logging.error(f"Invalid image in batch {batch_idx}: {img_path}")
-                        #continue
-                        #generate a blank image and replace the invalid image
-                        img_path = os.path.join(process_dir, f"blank_{batch_idx:04d}.png")
-                        Image.new('RGB', (1280, 720), (255, 255, 255)).save(img_path)
-
                     f.write(f"file '{os.path.abspath(img_path)}'\n")
                     f.write(f"duration {duration:.3f}\n")
 
@@ -166,23 +144,21 @@ class VideoProcessor:
                 logging.error(f"Empty list file for batch {batch_idx}")
                 return None
 
-            # Set the frame rate to 30 fps (or any other desired frame rate)
-            frame_rate = 30  # You can adjust this value as needed
-
+            frame_rate = 30
             (
-                    ffmpeg
-                    .input(list_file, format='concat', safe=0)
-                    .output(output_file,
-                        vsync='cfr',  # Force constant frame rate
+                ffmpeg
+                .input(list_file, format='concat', safe=0)
+                .output(output_file,
+                        vsync='cfr',
                         vcodec='libx264',
                         pix_fmt='yuv420p',
                         crf=18,
-                        r=frame_rate,  # Explicitly set frame rate
+                        r=frame_rate,
                         preset='veryslow',
                         movflags='+faststart')
-                    .overwrite_output()
-                    .run(quiet=True)
-                )
+                .overwrite_output()
+                .run(quiet=True)
+            )
 
             return output_file if self.is_valid_video(output_file) else None
         except Exception as e:
@@ -194,6 +170,15 @@ class VideoProcessor:
                     os.remove(list_file)
                 except Exception as e:
                     logging.warning(f"Error cleaning up list file: {str(e)}")
+
+    def _get_ordered_segments(self, segments: list) -> list:
+        try:
+            valid = [s for s in segments if s is not None]
+            valid.sort(key=lambda x: int(os.path.basename(x).split('_')[1].split('.')[0]))
+            return valid
+        except Exception as e:
+            logging.error(f"Segment ordering failed: {str(e)}")
+            return []
     
     def combine_segments(self, segments: List[str], output_path: str, audio_input: str = None) -> bool:
         """Combine video segments with background music handling and explicit stream mapping."""
