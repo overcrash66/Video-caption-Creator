@@ -350,4 +350,18 @@ class VideoProcessor:
             return float(probe['format']['duration'])
         except Exception as e:
             logging.error(f"Error getting audio duration: {str(e)}")
-            return 0.0    
+            return 0.0
+
+    def process(self, images: List[Dict], output_path: str, audio_input: str = None) -> bool:
+        """
+        Process the images into a video.
+        
+        Args:
+            images: List of dictionaries containing image paths and durations
+            output_path: Path where the final video should be saved
+            audio_input: Optional path to an audio file to be added to the video
+            
+        Returns:
+            bool: True if processing was successful, False otherwise
+        """
+        return self.process_images(images, output_path, audio_input)
