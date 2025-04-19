@@ -63,7 +63,7 @@ class ImageGenerator:
     
         return [img for img in generated if img is not None]  # Filter out None values
 
-    def generate_preview(self, text: str) -> Image.Image:
+    def generate_image(self, text: str) -> Image.Image:
         img = self.create_base_image()
         draw = ImageDraw.Draw(img)
         y = self.settings.get('margin', 20)
