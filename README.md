@@ -60,7 +60,7 @@ In content creation workflows, manually synchronizing audio with captions can co
 ### Installation
 
 For windows users:
-Download 7z file from [here](https://github.com/overcrash66/Video-caption-Creator/releases/download/v1.0.0/Video-Caption-Creator.7z)
+Download latest release from [here](https://github.com/overcrash66/Video-Caption-Creator/releases/latest/download/Video-Caption-Creator.7z)
 
 Extract and execute Video-Caption-Creator.exe
 
