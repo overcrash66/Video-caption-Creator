@@ -1,5 +1,4 @@
-from gui_components import GUIComponents
-from logging_setup import setup_logging
+from utils.gui_components import GUIComponents
 from utils.helpers import TempFileManager
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -17,9 +16,6 @@ class VideoConverterApp:
             root: The root window for the GUI.
         """
         self.root = root
-
-        # Setup logging
-        setup_logging()
 
         # Initialize GUI components
         self.initialize_app()
@@ -104,13 +100,3 @@ class VideoConverterApp:
         )
         if file_path:
             self.srt_path_var.set(file_path)
-
-    def reset_application(self):
-        """
-        Reset all application variables to their default values.
-        """
-        self.text_color_var.set("#FFFFFF")
-        self.bg_color_var.set("#000000")
-        self.font_size_var.set(24)
-        self.output_path_var.set("")
-        self.srt_path_var.set("")

@@ -10,11 +10,11 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, colorchooser
 from PIL import Image, ImageTk, ImageFont, ImageDraw
 import webbrowser
-from processors.sub2audio import SubToAudio
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 
 # Local application imports
+from processors.sub2audio import SubToAudio
 from processors.image_generator import ImageGenerator
 from processors.srt_parser import SRTParser
 from processors.video_processor import VideoProcessor
@@ -34,38 +34,24 @@ class GUIComponents:
         self.app = app
         self.root.title("Video Caption Creator")
         self.root.geometry("1000x850")
-        self.preview_window = None
-        self.settings = {}  # Initialize settings dictionary
-        self.running = False  # Initialize running state
-        self.futures = []  # Initialize futures list for cancellation
-
-        # Initialize variables
-        self.text_color_var = tk.StringVar(value="#FFFFFF")
-        self.bg_color_var = tk.StringVar(value="#000000")
-        self.font_size_var = tk.IntVar(value=24)
-        self.border_var = tk.BooleanVar(value=False)
-        self.expected_dimensions = (1280, 720)
-        self.shadow_var = tk.BooleanVar(value=False)
-        self.language_var = tk.StringVar(value="en")
-        self.model_var = tk.StringVar()
-        self.user_value_var = tk.StringVar(value="0")
-        self.background_image_path = None
-        self.background_music_path = None
-        self.custom_font_path = None
-        self.speaker_ref_path = None
-
-        # Initialize core processing components
-        self.temp_manager = TempFileManager()
-        self.style_parser = StyleParser()
-        self.srt_parser = SRTParser()
-        self.image_generator = ImageGenerator(self.temp_manager, self.style_parser, self.get_current_settings())
-        self.video_processor = VideoProcessor(self.temp_manager, self.get_current_settings())
-
-        # Setup logging
+        
+        # Setup logging first
         self.setup_logging()
-
+        
+        # Initialize the application state
+        self.initialize_app()
+        
+        # Setup UI styles
+        self.setup_styles()
+        
         # Create widgets
         self.create_widgets()
+        
+        # Load TTS models after UI is ready
+        self.root.after(100, self.load_tts_models)
+        
+        # Update settings to ensure consistency
+        self.update_settings()
 
     def setup_logging(self):
         logging.basicConfig(
@@ -133,10 +119,79 @@ class GUIComponents:
         self.temp_manager = TempFileManager()
         self.style_parser = StyleParser()
         self.srt_parser = SRTParser()
+        self.image_generator = ImageGenerator(
+            self.temp_manager, 
+            self.style_parser,
+            {
+            'text_color': '#FFFFFF',
+            'bg_color': '#000000', 
+            'font_size': 24,
+            'text_border': True,
+            'text_shadow': False,
+            'background_image': None,
+            'custom_font': None,
+            'margin': 20,
+            'expected_dimensions': self.expected_dimensions
+            }
+        )
 
+        self.video_processor = VideoProcessor(
+            self.temp_manager,
+            {
+            'batch_size': 50,
+            'background_music': None,
+            'expected_dimensions': self.expected_dimensions,
+            'speed_factor': 1.0
+            }
+        )
         # 4. Get initial settings from variables
         initial_settings = self.get_current_settings()
+        # Load or create initial settings
+        self.settings = {
+            'batch_size': 50,
+            'text_color': '#FFFFFF',
+            'bg_color': '#000000',
+            'font_size': 24,
+            'text_border': True,
+            'text_shadow': False,
+            'background_image': None,
+            'background_music': None,
+            'custom_font': None,
+            'speed_factor': 1.0,
+            'margin': 20,
+            'tts_model': None,
+            'tts_language': 'fr',
+            'expected_dimensions': self.expected_dimensions,
+            'user_value': 0
+        }
 
+        # Apply settings to variables
+        self.text_color_var.set(self.settings['text_color'])
+        self.bg_color_var.set(self.settings['bg_color']) 
+        self.font_size_var.set(self.settings['font_size'])
+        self.border_var.set(self.settings['text_border'])
+        self.shadow_var.set(self.settings['text_shadow'])
+        self.language_var.set(self.settings['tts_language'])
+        self.user_value_var.set(str(self.settings['user_value']))
+
+        # Setup style
+        style = ttk.Style()
+        style.theme_use('clam')
+
+        # Configure colors
+        style.configure('TFrame', background='#F0F0F0')
+        style.configure('TButton',
+            background='#4A90E2',
+            foreground='black', 
+            padding=5,
+            font=('Helvetica', 10))
+        style.configure('TLabel', 
+            background='#F0F0F0',
+            font=('Helvetica', 10))
+        style.configure('Header.TLabel',
+            background='#4A90E2',
+            foreground='white',
+            font=('Helvetica', 12, 'bold'))
         # 5. Create processing components with initial settings
         self.image_generator = ImageGenerator(
             self.temp_manager,
@@ -518,7 +573,7 @@ class GUIComponents:
         messagebox.showinfo("About", "Video Caption Creator\nVersion 1.0.2\nDeveloped by Wael Sahli")
 
     def open_link(self, event):
-        webbrowser.open("https://github.com/WaelSKamel/Video-caption-Creator")
+        webbrowser.open("https://github.com/overcrash66/")
 
     def show_preview(self):
         """
@@ -526,14 +581,16 @@ class GUIComponents:
         """
         current_settings = self.get_current_settings()
         self.image_generator.settings = current_settings  # Update generator settings
-
+        
         # Close existing preview
-        if self.preview_window:
+        if hasattr(self, 'preview_window') and self.preview_window:
             self.preview_window.destroy()
 
-        # Create preview window
+        # Create new preview window
         self.preview_window = tk.Toplevel(self.root)
         self.preview_window.title("Text Style Preview")
+        self.preview_window.geometry("800x600")
+        self.preview_window.resizable(False, False)
 
         # Add loading container
         loading_frame = ttk.Frame(self.preview_window)
@@ -624,7 +681,12 @@ class GUIComponents:
     def run_external_script(self, delay: int):
         try:
             self.update_status("Adjusting SRT timings...", 0)
-            script_path = os.path.join(os.path.dirname(__file__), "processors", "editSrtFileTime.py")
+            # Go up one directory from utils to find processors
+            base_dir = os.path.dirname(os.path.dirname(__file__))
+            script_path = os.path.join(base_dir, "processors", "editSrtFileTime.py")
+
+            if not os.path.exists(script_path):
+                raise FileNotFoundError(f"Script not found at: {script_path}")
 
             # Create temp directory if not exists
             self.temp_manager._init_dirs()
@@ -652,16 +714,19 @@ class GUIComponents:
             if not os.path.exists(adjusted_srt):
                 raise RuntimeError("SRT adjustment failed to create output file")
 
-            #self.root.after(0, self.prompt_for_output_and_generate)
             return adjusted_srt
         
         except subprocess.CalledProcessError as e:
             error_msg = f"SRT adjustment failed:\n{e.stderr}"
             logging.error(f"STDOUT: {e.stdout}\nSTDERR: {e.stderr}")
+            self.root.after(0, lambda: messagebox.showerror("Error", error_msg))
+            return None
 
         except Exception as e:
             error_msg = f"SRT adjustment error: {str(e)}"
             logging.error(error_msg, exc_info=True)
+            self.root.after(0, lambda: messagebox.showerror("Error", error_msg))
+            return None
 
         finally:
             self.running = False
@@ -842,7 +907,7 @@ class GUIComponents:
 
     def load_tts_models(self):
         """Load available TTS models into combobox"""
-        if hasattr(self, 'model_combo'):
+        if hasattr(self, 'model_combo') and self.model_combo.winfo_exists():
             # Disable combobox and show loading state
             self.model_combo.set("Loading models...")
             self.model_combo.configure(state='disabled')
@@ -869,12 +934,51 @@ class GUIComponents:
             if self.root.winfo_exists():
                 self.root.after(0, lambda: self.model_combo.configure(state='readonly'))
                 self.root.after(0, lambda: self.model_combo.set("Select a model"))
-                self.root.update_idletasks()
-                self.running = False
-                self.futures = []  # Reset futures list
-                self.update_status("Ready", 0)
-                self.progress_label.config(text="Ready")
-                self.progress.configure(value=0)
+
+    def _on_model_selected(self, event=None):
+        """Handle model selection and populate languages"""
+        model = self.model_var.get()
+        if not model:
+            return
+
+        # Show loading indicator
+        loading_window = tk.Toplevel(self.root)
+        loading_window.title("Loading Model")
+        loading_window.geometry("300x100")
+        loading_window.transient(self.root)
+        loading_window.grab_set()
+        
+        loading_label = ttk.Label(loading_window, text="Loading model, please wait...", padding=20)
+        loading_label.pack()
+        
+        progress = ttk.Progressbar(loading_window, mode='indeterminate')
+        progress.pack(padx=20, fill=tk.X)
+        progress.start()
+
+        def load_model():
+            try:
+                self.current_tts = SubToAudio(model_name=model)
+                langs = self.current_tts.languages()
+                
+                self.root.after(0, lambda: self._update_languages(langs))
+                
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("Model Error", f"Failed to initialize model: {str(e)}"))
+                logging.error(f"Error loading model: {str(e)}")
+            finally:
+                self.root.after(0, loading_window.destroy)
+
+        # Start loading in background
+        threading.Thread(target=load_model, daemon=True).start()
+
+    def _update_languages(self, langs):
+        """Update language dropdown with available languages"""
+        if not langs:
+            self.lang_combo.set("fr")
+            return
+            
+        self.lang_combo['values'] = langs
+        self.lang_combo.set(langs[0])
 
     def _update_model_dropdown(self, models):
         """Update model dropdown safely"""
@@ -890,11 +994,6 @@ class GUIComponents:
         else:
             self.model_combo.set("No models available")
             messagebox.showwarning("Models", "No TTS models found. Please install models first.")
-        if models:
-            self.model_combo['values'] = models
-            self.model_var.set(models[0])
-        else:
-            self.model_combo.set("No models available")
 
     def generate_video(self, output_path: str, srt_path: str) -> None:
         """Process subtitle entries into a video with audio"""
@@ -902,8 +1001,11 @@ class GUIComponents:
             self.update_settings()
             self.update_status("Initializing video generation...", 0)
 
+            # Ensure temp directory is initialized
+            self.temp_manager._init_dirs()
+            
             adjusted_srt = srt_path
-            if not self.temp_manager.verify_file(adjusted_srt):
+            if not os.path.exists(adjusted_srt):
                 raise FileNotFoundError("Adjusted SRT file not found or empty")
 
             # 2. Parse subtitle entries with time validation
