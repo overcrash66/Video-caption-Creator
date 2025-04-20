@@ -1,6 +1,5 @@
 from gui_components import GUIComponents
 from logging_setup import setup_logging
-from video_generation import VideoGenerator
 from utils.helpers import TempFileManager
 import tkinter as tk
 from tkinter import filedialog, messagebox
