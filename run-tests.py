@@ -3,6 +3,14 @@ import sys
 import unittest
 
 def run_tests():
+    #delete the old test directory if it exists
+    test_dir = os.path.join(os.path.dirname(__file__), 'test_dir')
+    if os.path.exists(test_dir):
+        try:
+            os.rmdir(test_dir)
+        except OSError as e:
+            print(f"Error deleting test directory: {e}")
+
     # Determine the project root directory (where this script is located)
     project_root = os.path.abspath(os.path.dirname(__file__))
     print("Project root:", project_root)
