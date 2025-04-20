@@ -880,7 +880,7 @@ class GUIComponents:
             #self.root.after(0, messagebox.showinfo, "Audio Generation complete", str(output_path))
         except Exception as e:
             logging.error(f"Audio generation failed: {str(e)}")
-            self.root.after(0, messagebox.showerror, "Audio Generation Error", str(e))
+            #self.root.after(0, messagebox.showerror, "Audio Generation Error", str(e))
             raise   
 
 
