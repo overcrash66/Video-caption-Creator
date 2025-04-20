@@ -2,23 +2,21 @@ from PIL import Image, ImageDraw, ImageFont, ImageColor, ImageOps
 import html
 import logging
 import os
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 from utils.style_parser import StyleParser
 from processors.sub2audio import SubToAudio
 from pydub import AudioSegment
+from utils.helpers import TempFileManager
 
 class ImageGenerator:
     """Handles the generation of caption images with various styles and effects."""
     
-    def __init__(self, temp_manager: any, style_parser: StyleParser, settings: dict) -> None:
-        if not temp_manager or not style_parser or not settings:
-            raise ValueError("Required parameters cannot be None")
-        if not hasattr(temp_manager, 'image_dir'):
-            raise AttributeError("temp_manager must have image_dir attribute")
-
+    def __init__(self, temp_manager: Any, style_parser: StyleParser, settings: dict) -> None:
         self.temp_manager = temp_manager
         self.style_parser = style_parser
         self.settings = settings.copy()
+        self.process_dir = self.temp_manager.process_dir
+        self.temp_dirs = []  # Keep track of created process directories
 
         if 'frame_delay' not in self.settings:
             self.settings['frame_delay'] = 1.0
@@ -360,3 +358,24 @@ class ImageGenerator:
         # Fallback to default system font from Pillow's load_default (which returns a font object, not a path)
         # Here we return a common fallback; you might adjust this for your system.
         return os.path.join(font_dir, 'arial.ttf')
+    
+    @staticmethod
+    def process_image_batch(images: List[Dict], output_dir: str) -> str:
+        """Process a batch of images and combine them into a final output.
+        Args:
+            images: List of dicts containing image paths and durations
+            output_dir: Directory to save the processed output
+        Returns:
+            Path to the processed output file
+        """
+        final_audio = AudioSegment.empty()
+        for img_info in images:
+            if not img_info or 'duration' not in img_info:
+                continue
+            duration_ms = int(img_info['duration'] * 1000)
+            silence = AudioSegment.silent(duration=duration_ms)
+            final_audio += silence
+
+        output_path = os.path.join(output_dir, "processed_batch.mp3")
+        final_audio.export(output_path, format="mp3")
+        return output_path

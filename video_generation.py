@@ -30,4 +30,4 @@ class VideoGenerator:
             return final_video
         except Exception as e:
             logging.error(f"Video generation failed: {str(e)}")
-            raise
+            raise    

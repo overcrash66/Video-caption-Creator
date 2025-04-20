@@ -14,7 +14,12 @@ class VideoProcessor:
         self.temp_manager = temp_manager
         self.settings = settings.copy()
         self.process_dir = self.temp_manager.process_dir
-        self.temp_dirs: List[str] = []  # Keep track of created process directories
+        self.verify_file = self.temp_manager.verify_file  # Add reference to verify_file method
+        self.temp_dirs = []  # Keep track of created process directories
+        self.temp_dir = self.process_dir  # Add temp_dir initialization
+        self.image_dir = settings.get('image_dir', os.path.join(self.process_dir, 'images'))
+        if not os.path.exists(self.image_dir):
+            os.makedirs(self.image_dir)
 
     def __del__(self):
         # Clean up all created temporary directories
@@ -145,20 +150,24 @@ class VideoProcessor:
                 return None
 
             frame_rate = 30
-            (
-                ffmpeg
-                .input(list_file, format='concat', safe=0)
-                .output(output_file,
-                        vsync='cfr',
-                        vcodec='libx264',
-                        pix_fmt='yuv420p',
-                        crf=18,
-                        r=frame_rate,
-                        preset='veryslow',
-                        movflags='+faststart')
-                .overwrite_output()
-                .run(quiet=True)
-            )
+            try:
+                cmd = (
+                    ffmpeg
+                    .input(list_file, format='concat', safe=0)
+                    .output(output_file,
+                            vsync='cfr',
+                            vcodec='libx264',
+                            pix_fmt='yuv420p',
+                            crf=18,
+                            r=frame_rate,
+                            preset='medium',
+                            movflags='+faststart')
+                )
+                cmd.overwrite_output().run(capture_stdout=True, capture_stderr=True)
+                logging.info(f"Successfully created video segment for batch {batch_idx}")
+            except ffmpeg.Error as e:
+                logging.error(f"FFmpeg error in batch {batch_idx}: {e.stderr.decode() if e.stderr else str(e)}")
+                return None
 
             return output_file if self.is_valid_video(output_file) else None
         except Exception as e:

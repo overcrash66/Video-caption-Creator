@@ -1,7 +1,7 @@
 from gui_components import GUIComponents
 from logging_setup import setup_logging
 from video_generation import VideoGenerator
-from settings_manager import SettingsManager
+from utils.helpers import TempFileManager
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -21,13 +21,6 @@ class VideoConverterApp:
 
         # Setup logging
         setup_logging()
-
-        # Initialize managers and components
-        self.settings_manager = SettingsManager()
-        self.temp_manager = None  # Initialize or import proper TempManager class
-        self.video_processor = None  # Initialize or import proper VideoProcessor class
-        self.image_generator = None  # Initialize or import proper ImageGenerator class
-        self.video_generator = VideoGenerator(self.temp_manager, self.video_processor, self.image_generator)
 
         # Initialize GUI components
         self.initialize_app()
