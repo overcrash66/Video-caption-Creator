@@ -47,8 +47,15 @@ class GUIComponents:
         # Create widgets
         self.create_widgets()
         
-        # Load TTS models after UI is ready
-        self.root.after(100, self.load_tts_models)
+        # Load TTS models immediately and ensure proper initialization
+        try:
+            self.current_tts = SubToAudio()
+            self.model_var.set('xtts')  # Set default model
+            self.language_var.set('fr')  # Set default language
+            self.load_tts_models()  # Load available models
+        except Exception as e:
+            logging.error(f"Failed to initialize TTS: {str(e)}")
+            messagebox.showwarning("TTS Initialization", "TTS models could not be loaded. Some features may be limited.")
         
         # Update settings to ensure consistency
         self.update_settings()
@@ -427,16 +434,20 @@ class GUIComponents:
 
             # Language Selection
             ttk.Label(tts_frame, text="Language:").grid(row=2, column=0)
+            # Language combo with default options in case model loading fails
             self.lang_combo = ttk.Combobox(
-                tts_frame, 
-                textvariable=self.language_var,  # Link to StringVar
+                tts_frame,
+                textvariable=self.language_var,
                 state='readonly',
-                width=15
+                width=15,
+                values=['fr', 'en', 'es', 'de']  # Default language options
             )
+
             self.lang_combo.grid(row=2, column=1)
             self.lang_combo.set("fr")  # Initial value
             # Auto-select XTTS model
-            if 'xtts' in SubToAudio().coqui_model():
+            if hasattr(SubToAudio(), 'coqui_model') and SubToAudio().coqui_model:
+            #if 'xtts' in SubToAudio().coqui_model():
                 self.model_var.set('xtts')
                 self.language_var.set('fr')  # Default to French
             # Reset color labels
@@ -570,7 +581,7 @@ class GUIComponents:
             logging.info(f"Selected SRT file: {file_path}")
     
     def show_about(self):
-        messagebox.showinfo("About", "Video Caption Creator\nVersion 1.0.2\nDeveloped by Wael Sahli")
+        messagebox.showinfo("About", "Video Caption Creator\nVersion 1.0.3\nDeveloped by Wael Sahli")
 
     def open_link(self, event):
         webbrowser.open("https://github.com/overcrash66/")
@@ -821,24 +832,6 @@ class GUIComponents:
             self.root.update_idletasks()
             messagebox.showinfo("Reset Complete", "Application has been reset to default state")        
 
-    def _on_model_selected(self, event=None):
-        """Handle model selection and populate languages"""
-        model = self.model_var.get()
-        if not model:
-            return
-
-        try:
-            # Corrected variable name from current_ts to current_tts
-            self.current_tts = SubToAudio(model_name=model)
-            langs = self.current_tts.languages()
-            
-            self.lang_combo['values'] = langs
-            self.lang_combo.set(langs[0] if langs else "fr")
-            
-        except Exception as e:
-            messagebox.showerror("Model Error", f"Failed to initialize model: {str(e)}")
-            print(f"Error loading model: {str(e)}")  # Debug log   
-
     def generate_audio_only(self):
         """Generate audio only"""
         try:
@@ -883,7 +876,6 @@ class GUIComponents:
             #self.root.after(0, messagebox.showerror, "Audio Generation Error", str(e))
             raise   
 
-
     def check_tts_installation(self):
         """Verify TTS is properly installed and has models"""
         try:
@@ -899,39 +891,61 @@ class GUIComponents:
                 )
         except ImportError:
             messagebox.showerror(
-                "Missing Dependency",
-                "Coqui TTS not installed!\n"
-                "Install with: pip install TTS"
+                "TTS Not Installed",
+                "TTS library is not installed.\n"
+                "Please install it using:\n"
+                "pip install TTS"
             )
-            self.root.destroy()
-
+    
     def load_tts_models(self):
         """Load available TTS models into combobox"""
         if hasattr(self, 'model_combo') and self.model_combo.winfo_exists():
-            # Disable combobox and show loading state
-            self.model_combo.set("Loading models...")
-            self.model_combo.configure(state='disabled')
-            
-            # Start loading in background
-            threading.Thread(target=self._populate_models, daemon=True).start()
+            try:
+                # Disable combobox while loading
+                self.model_combo.configure(state='disabled')
+                self.model_combo.set("Loading models...")
+                
+                # Start loading in background to avoid UI freeze
+                threading.Thread(target=self._populate_models, daemon=True).start()
+                
+            except Exception as e:
+                logging.error(f"Failed to load TTS models: {str(e)}")
+                self.model_combo.set("Model loading failed")
+                messagebox.showwarning("Model Loading", "Failed to load TTS models. Please check your installation.")
+                self.model_combo.configure(state='readonly')
 
     def _populate_models(self):
         """Thread-safe model loading"""
         try:
-            model_names = SubToAudio().coqui_model()
-                 
-            valid_models = [m for m in model_names if SubToAudio()._model_exists(m)]
+            # Create a single instance of SubToAudio with error handling
+            try:
+                sub_to_audio = SubToAudio()
+                # Always include XTTS as it's the base model
+                valid_models = ['xtts']
+                if not hasattr(sub_to_audio, 'coqui_model'):
+                    logging.warning("coqui_model attribute not found in SubToAudio instance")
+                    
+            except Exception as tts_error:
+                logging.error(f"SubToAudio initialization failed: {str(tts_error)}")
+                valid_models = []
             
-            if self.root.winfo_exists():
-                self.root.after(0, self._update_model_dropdown, valid_models)
+            # Update UI only if root still exists
+            if self.root and self.root.winfo_exists():
+                if valid_models:
+                    self.root.after(0, self._update_model_dropdown, valid_models)
+                else:
+                    self.root.after(0, lambda: messagebox.showwarning(
+                        "TTS Models",
+                        "No TTS models were found.\nPlease check your installation."
+                    ))
                 
         except Exception as e:
             logging.error(f"Failed to load models: {str(e)}")
-            if self.root.winfo_exists():
+            if self.root and self.root.winfo_exists():
                 self.root.after(0, messagebox.showerror, "Model Load Error", str(e))
         finally:
-            # Re-enable combobox
-            if self.root.winfo_exists():
+            # Re-enable combobox if it exists
+            if self.root and self.root.winfo_exists() and hasattr(self, 'model_combo'):
                 self.root.after(0, lambda: self.model_combo.configure(state='readonly'))
                 self.root.after(0, lambda: self.model_combo.set("Select a model"))
 
@@ -942,34 +956,53 @@ class GUIComponents:
             return
 
         # Show loading indicator
-        loading_window = tk.Toplevel(self.root)
-        loading_window.title("Loading Model")
-        loading_window.geometry("300x100")
-        loading_window.transient(self.root)
-        loading_window.grab_set()
-        
-        loading_label = ttk.Label(loading_window, text="Loading model, please wait...", padding=20)
-        loading_label.pack()
-        
-        progress = ttk.Progressbar(loading_window, mode='indeterminate')
-        progress.pack(padx=20, fill=tk.X)
-        progress.start()
+        try:
+            loading_window = tk.Toplevel(self.root)
+            loading_window.title("Loading Model")
+            loading_window.geometry("300x100")
+            loading_window.transient(self.root)
+            loading_window.grab_set()
+            
+            loading_label = ttk.Label(loading_window, text="Loading model, please wait...", padding=20)
+            loading_label.pack()
+            
+            progress = ttk.Progressbar(loading_window, mode='indeterminate')
+            progress.pack(padx=20, fill=tk.X)
+            progress.start()
 
-        def load_model():
-            try:
-                self.current_tts = SubToAudio(model_name=model)
-                langs = self.current_tts.languages()
-                
-                self.root.after(0, lambda: self._update_languages(langs))
-                
-            except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("Model Error", f"Failed to initialize model: {str(e)}"))
-                logging.error(f"Error loading model: {str(e)}")
-            finally:
-                self.root.after(0, loading_window.destroy)
+            def load_model():
+                try:
+                    # Initialize TTS with error handling
+                    if not hasattr(self, 'current_tts') or self.current_tts is None:
+                        self.current_tts = SubToAudio()
+                    
+                    # Set the model
+                    self.current_tts.model_name = model
+                    
+                    # Default languages for XTTS model
+                    langs = ['fr', 'en', 'es', 'de', 'it', 'pt', 'pl', 'tr', 'ru', 'nl', 'cs', 'ar', 'zh-cn', 'ja', 'ko', 'hi']
+                    
+                    # Update UI safely using after method
+                    if self.root and self.root.winfo_exists():
+                        self.root.after(0, lambda: self._update_languages(langs))
+                    
+                except Exception as e:
+                    error_msg = f"Failed to initialize model: {str(e)}"
+                    logging.error(error_msg)
+                    if self.root and self.root.winfo_exists():
+                        self.root.after(0, lambda: messagebox.showerror("Model Error", error_msg))
+                finally:
+                    # Ensure loading window is destroyed
+                    if self.root and self.root.winfo_exists():
+                        self.root.after(0, loading_window.destroy)
 
-        # Start loading in background
-        threading.Thread(target=load_model, daemon=True).start()
+            # Start loading in background
+            threading.Thread(target=load_model, daemon=True).start()
+
+        except Exception as e:
+            logging.error(f"Failed to create loading window: {str(e)}")
+            if hasattr(self, 'root') and self.root and self.root.winfo_exists():
+                messagebox.showerror("UI Error", "Failed to initialize loading window")
 
     def _update_languages(self, langs):
         """Update language dropdown with available languages"""
@@ -1004,9 +1037,17 @@ class GUIComponents:
             # Ensure temp directory is initialized
             self.temp_manager._init_dirs()
             
+            # Validate SRT path
+            if not srt_path or not isinstance(srt_path, str):
+                raise ValueError("Invalid SRT file path provided")
+                
             adjusted_srt = srt_path
             if not os.path.exists(adjusted_srt):
-                raise FileNotFoundError("Adjusted SRT file not found or empty")
+                raise FileNotFoundError(f"Adjusted SRT file not found at: {adjusted_srt}")
+            
+            # Check if file is empty
+            if os.path.getsize(adjusted_srt) == 0:
+                raise ValueError("SRT file is empty")
 
             # 2. Parse subtitle entries with time validation
             self.update_status("Parsing subtitles...", 5)
