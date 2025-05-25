@@ -48,6 +48,7 @@ jobs:
           pip install numpy
           pip install gruut
           pip install jamo
+          pip install --upgrade --force-reinstall transformers
       
       - name: Verify inflect Installation
         run: |
@@ -125,6 +126,7 @@ jobs:
           --hidden-import=torch.utils `
           --hidden-import=torch.jit `
           --hidden-import=librosa `
+          --hidden-import=transformers `
           --hidden-import=inflect,typeguard,_typeshed `
           --hidden-import=typeguard._decorators,typeguard._importhook `
           --hidden-import=inflect.engine,typeguard._importhook `
