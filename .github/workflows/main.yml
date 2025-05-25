@@ -37,8 +37,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
+          pip install "numpy<1.28.0"
           pip install -r requirements.txt
+          pip install pyinstaller pyinstaller-hooks-contrib
           python -m ensurepip
           pip install pillow pydub TTS ffmpeg-python
           pip install torch==2.5.0 torchaudio==2.5.0 torchvision==0.20.0
@@ -75,12 +76,15 @@ jobs:
       - name: Verify torch Installation
         run: |
           python -c "import torch; print('torch Path:', torch.__path__)"
+          python -c "import scipy; print(f'scipy: {scipy.__version__}')"
+          python -c "import numpy; print(f'numpy: {numpy.__version__}')"
       
       - name: Build binary with PyInstaller (non-single file)
         run: |
           $TTS_VERSION_PATH = python -c "import TTS, os; print(os.path.dirname(TTS.__file__))"
           $TRAINER_VERSION_PATH = python -c "import trainer, os; print(os.path.dirname(trainer.__file__))"
           $torchPath = python -c "import torch, os; print(os.path.dirname(torch.__file__))"
+          $scipy_path = python -c "import scipy, os; print(os.path.dirname(scipy.__file__))"
           Write-Host "Torch path: $torchPath"
           pyinstaller --noconfirm --onedir --additional-hooks-dir=. --name Video-Caption-Creator `
           --add-data "utils;utils" `
@@ -142,6 +146,9 @@ jobs:
           --hidden-import=sklearn.utils._weight_vector `
           --hidden-import=sklearn.neighbors._typedefs `
           --hidden-import=sklearn.neighbors._quad_tree `
+          --add-data "$scipy_path;scipy" `
+          --hidden-import scipy.special.cython_special `
+          --hidden-import scipy.sparse.csgraph `
           --exclude-module "torch.testing" `
           --exclude-module "TTS.tests" `
           --hidden-import "numpy" `
