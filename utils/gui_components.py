@@ -570,7 +570,7 @@ class GUIComponents:
             logging.info(f"Selected SRT file: {file_path}")
     
     def show_about(self):
-        messagebox.showinfo("About", "Video Caption Creator\nVersion 1.0.2\nDeveloped by Wael Sahli")
+        messagebox.showinfo("About", "Video Caption Creator\nVersion 1.0.3\nDeveloped by Wael Sahli")
 
     def open_link(self, event):
         webbrowser.open("https://github.com/overcrash66/")
@@ -1005,6 +1005,8 @@ class GUIComponents:
             self.temp_manager._init_dirs()
             
             adjusted_srt = srt_path
+            if adjusted_srt is None:
+                raise ValueError("SRT adjustment failed, no valid file was produced")
             if not os.path.exists(adjusted_srt):
                 raise FileNotFoundError("Adjusted SRT file not found or empty")
 
