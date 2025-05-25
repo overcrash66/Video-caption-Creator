@@ -49,6 +49,7 @@ jobs:
           pip install gruut
           pip install jamo
           pip install transformers
+          pip install moviepy
       
       - name: Verify inflect Installation
         run: |
@@ -84,6 +85,7 @@ jobs:
           $TRAINER_VERSION_PATH = python -c "import trainer, os; print(os.path.dirname(trainer.__file__))"
           $torchPath = python -c "import torch, os; print(os.path.dirname(torch.__file__))"
           $scipy_path = python -c "import scipy, os; print(os.path.dirname(scipy.__file__))"
+          $transformers_path = python -c "import transformers, os; print(os.path.dirname(transformers.__file__))"
           Write-Host "Torch path: $torchPath"
           pyinstaller --noconfirm --onedir --additional-hooks-dir=. --name Video-Caption-Creator `
           --add-data "utils;utils" `
@@ -129,7 +131,9 @@ jobs:
           --hidden-import=torch.utils `
           --hidden-import=torch.jit `
           --hidden-import=librosa `
-          --hidden-import=transformers `
+          --add-data "$transformers_path;transformers" `
+          --collect-submodules transformers `
+          --hidden-import transformers.configuration_utils `
           --hidden-import=inflect,typeguard,_typeshed `
           --hidden-import=typeguard._decorators,typeguard._importhook `
           --hidden-import=inflect.engine,typeguard._importhook `
@@ -148,6 +152,8 @@ jobs:
           --add-data "$scipy_path;scipy" `
           --hidden-import scipy.special.cython_special `
           --hidden-import scipy.sparse.csgraph `
+          --hidden-import moviepy `
+          --collect-submodules moviepy `
           --exclude-module "torch.testing" `
           --exclude-module "TTS.tests" `
           --hidden-import "numpy" `
