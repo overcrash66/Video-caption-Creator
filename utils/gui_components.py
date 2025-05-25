@@ -1005,6 +1005,8 @@ class GUIComponents:
             self.temp_manager._init_dirs()
             
             adjusted_srt = srt_path
+            if adjusted_srt is None:
+                raise ValueError("SRT adjustment failed, no valid file was produced")
             if not os.path.exists(adjusted_srt):
                 raise FileNotFoundError("Adjusted SRT file not found or empty")
 
