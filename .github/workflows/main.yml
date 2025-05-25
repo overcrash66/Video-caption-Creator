@@ -39,7 +39,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install "numpy==1.26.4" --force-reinstall
           pip install "scipy==1.11.4" --force-reinstall
-          pip install -r requirements.txt
           pip install pyinstaller pyinstaller-hooks-contrib
           python -m ensurepip
           pip install pillow pydub TTS ffmpeg-python
@@ -50,6 +49,8 @@ jobs:
           pip install jamo
           pip install transformers
           pip install moviepy
+          pip install "scipy==1.11.4" --force-reinstall
+          pip install "numpy==1.26.4" --force-reinstall
       
       - name: Verify inflect Installation
         run: |
@@ -100,6 +101,7 @@ jobs:
           --add-binary "$torchPath\lib\*.dll;torch\lib" `
           --hidden-import=tkinter `
           --collect-submodules TTS `
+          --collect-submodules pillow `
           --collect-all torch `
           --collect-submodules inflect `
           --collect-submodules typeguard `
@@ -117,6 +119,7 @@ jobs:
           --hidden-import=PIL.ImageOps `
           --hidden-import=PIL.ImageTk `
           --hidden-import=pydub `
+          --hidden-import=pillow `
           --hidden-import=TTS `
           --hidden-import=ffmpeg `
           --hidden-import=concurrent.futures `
@@ -159,6 +162,7 @@ jobs:
           --hidden-import "numpy" `
           --hidden-import "numpy.random" `
           --exclude-module "numpy._pytest" `
+          --hidden-import numpy.core.multiarray `
           main.py
         shell: pwsh
       
