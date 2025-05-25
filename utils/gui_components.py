@@ -570,7 +570,7 @@ class GUIComponents:
             logging.info(f"Selected SRT file: {file_path}")
     
     def show_about(self):
-        messagebox.showinfo("About", "Video Caption Creator\nVersion 1.0.2\nDeveloped by Wael Sahli")
+        messagebox.showinfo("About", "Video Caption Creator\nVersion 1.0.3\nDeveloped by Wael Sahli")
 
     def open_link(self, event):
         webbrowser.open("https://github.com/overcrash66/")
