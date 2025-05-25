@@ -37,7 +37,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install "numpy<1.28.0"
+          pip install "numpy==1.26.4" --force-reinstall
+          pip install "scipy==1.11.4" --force-reinstall
           pip install -r requirements.txt
           pip install pyinstaller pyinstaller-hooks-contrib
           python -m ensurepip
@@ -45,11 +46,9 @@ jobs:
           pip install torch==2.5.0 torchaudio==2.5.0 torchvision==0.20.0
           pip install librosa trainer
           pip install "inflect<6.0" "pydantic<2.0"
-          pip install pyinstaller-hooks-contrib
-          pip install numpy
           pip install gruut
           pip install jamo
-          pip install --upgrade --force-reinstall transformers
+          pip install transformers
       
       - name: Verify inflect Installation
         run: |
