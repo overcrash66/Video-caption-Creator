@@ -686,6 +686,7 @@ class GUIComponents:
             script_path = os.path.join(base_dir, "processors", "editSrtFileTime.py")
 
             if not os.path.exists(script_path):
+                logging.error(f"Script not found at: {script_path}")
                 raise FileNotFoundError(f"Script not found at: {script_path}")
 
             # Create temp directory if not exists
@@ -693,21 +694,27 @@ class GUIComponents:
 
             # Use proper temp file path
             adjusted_srt = os.path.join(self.temp_manager.root_dir, "temp.srt")
+            
+            # Use sys.executable to get the current Python interpreter path
+            import sys
+            python_executable = sys.executable
+            
             command = [
-                "python", script_path,
+                python_executable, script_path,
                 self.srt_path,
                 str(delay),
-                adjusted_srt  # Use full temp path instead of "temp.srt"
+                adjusted_srt
             ]
-
+            
+            logging.info(f"Running command: {' '.join(command)}")
+            
             process = subprocess.run(
                 command,
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=30,
-                cwd=self.temp_manager.root_dir  # Run in temp directory
+                timeout=30
             )
 
             # Verify output file creation
