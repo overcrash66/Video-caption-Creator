@@ -682,88 +682,140 @@ class GUIComponents:
 
     def run_external_script(self, delay: int):
         try:
-            self.update_status("Adjusting SRT timings...", 0)
-            # Create temp directory if not exists
+            # Ensure temp directories are initialized
             self.temp_manager._init_dirs()
-
-            # Use proper temp file path
-            adjusted_srt = os.path.join(self.temp_manager.root_dir, "temp.srt")
             
-            # Try to directly import and use the function instead of subprocess
-            try:
-                sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-                from processors.editSrtFileTime import adjust_srt_time
+            # Create temporary output path
+            temp_dir = self.temp_manager.temp_dir
+            output_path = os.path.join(temp_dir, "adjusted_srt.srt")
+            
+            # Use direct SRT adjustment instead of external script
+            return self.adjust_srt_directly(self.srt_path, delay, output_path)
                 
-                # Directly call the function
-                adjust_srt_time(self.srt_path, delay, adjusted_srt)
-                logging.info(f"SRT adjustment completed directly: {adjusted_srt}")
-                
-            except ImportError:
-                # Fallback to subprocess with increased timeout
-                base_dir = os.path.dirname(os.path.dirname(__file__))
-                script_path = os.path.join(base_dir, "processors", "editSrtFileTime.py")
-                
-                if not os.path.exists(script_path):
-                    logging.error(f"Script not found at: {script_path}")
-                    raise FileNotFoundError(f"Script not found at: {script_path}")
-                
-                # Use sys.executable to get the current Python interpreter path
-                python_executable = sys.executable
-                
-                command = [
-                    python_executable, script_path,
-                    self.srt_path,
-                    str(delay),
-                    adjusted_srt
-                ]
-                
-                logging.info(f"Running command: {' '.join(command)}")
-                
-                try:
-                    result = subprocess.run(
-                        command,
-                        check=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        encoding="utf-8",
-                        text=True,
-                        timeout=120  # Increased timeout to 2 minutes
-                    )
-                    # Log the output for debugging
-                    logging.info(f"SRT adjustment output: {result.stdout}")
-                except UnicodeDecodeError:
-                    # Try alternative encoding if UTF-8 fails
-                    result = subprocess.run(
-                        command,
-                        check=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        encoding="cp1252",  # Try Windows default encoding
-                        text=True,
-                        timeout=120  # Increased timeout to 2 minutes
-                    )
-                    logging.info(f"SRT adjustment output (using alternative encoding): {result.stdout}")
-
-            # Verify output file creation
-            if not os.path.exists(adjusted_srt):
-                raise RuntimeError("SRT adjustment failed to create output file")
-
-            return adjusted_srt
-        
-        except subprocess.CalledProcessError as e:
-            error_msg = f"SRT adjustment failed:\n{e.stderr}"
-            logging.error(f"STDOUT: {e.stdout}\nSTDERR: {e.stderr}")
-            self.root.after(0, lambda: messagebox.showerror("Error", error_msg))
-            return None
-
         except Exception as e:
-            error_msg = f"SRT adjustment error: {str(e)}"
-            logging.error(error_msg, exc_info=True)
-            self.root.after(0, lambda: messagebox.showerror("Error", error_msg))
-            return None
-
-        finally:
-            self.running = False
+            logging.error(f"Error adjusting SRT: {e}", exc_info=True)
+            raise RuntimeError(f"SRT adjustment failed: {str(e)}")
+            
+    def adjust_srt_directly(self, input_path, delay_ms, output_path):
+        """Adjust SRT timecodes directly without calling external script"""
+        try:
+            # Import re for regex operations
+            import re
+            import codecs
+            
+            logging.info(f"Adjusting SRT file: {input_path} with delay {delay_ms}ms")
+            
+            # Try multiple encodings to handle different file formats
+            encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']
+            content = None
+            
+            for encoding in encodings:
+                try:
+                    with codecs.open(input_path, 'r', encoding=encoding) as f:
+                        content = f.read()
+                    if content and content.strip():
+                        logging.info(f"Successfully read SRT file with encoding: {encoding}")
+                        break
+                except UnicodeDecodeError:
+                    continue
+            
+            # No need to redefine methods here - we'll use the class-level method
+            if not content or not content.strip():
+                raise RuntimeError(f"SRT file is empty or cannot be decoded: {input_path}")
+                
+            # Pattern to match timecode lines
+            # Format: 00:00:00,000 --> 00:00:00,000
+            timecode_pattern = re.compile(r'(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})')
+            
+            # Normalize line endings to ensure consistent splitting
+            content = content.replace('\r\n', '\n').replace('\r', '\n')
+            
+            # Validate SRT format - try different splitting patterns
+            entries = re.split(r'\n\n+', content.strip())
+            if len(entries) < 1:
+                # Try alternative splitting
+                entries = re.split(r'\d+\n\d{2}:\d{2}:\d{2},\d{3}\s*-->', content.strip())
+                entries = [e for e in entries if e.strip()]
+            
+            if len(entries) < 1:
+                logging.error(f"Invalid SRT format: no entries found in {input_path}")
+                logging.error(f"Content sample: {content[:200]}...")
+                raise RuntimeError(f"Invalid SRT format: no entries found in {input_path}")
+                
+            # Check if first entry has valid format (number, timecode, text)
+            first_entry = entries[0].split('\n')
+            if len(first_entry) < 2 or not any(timecode_pattern.search(line) for line in first_entry):
+                logging.error(f"Invalid SRT format: first entry doesn't match expected format")
+                logging.error(f"First entry: {entries[0]}")
+                raise RuntimeError(f"Invalid SRT format in {input_path}")
+            
+            logging.info(f"Found {len(entries)} subtitle entries to adjust")
+            
+            def adjust_timecode(match):
+                # Convert matched groups to integers
+                h1, m1, s1, ms1, h2, m2, s2, ms2 = map(int, match.groups())
+                
+                # Convert to milliseconds
+                time1_ms = h1 * 3600000 + m1 * 60000 + s1 * 1000 + ms1
+                time2_ms = h2 * 3600000 + m2 * 60000 + s2 * 1000 + ms2
+                
+                # Apply delay
+                time1_ms += delay_ms
+                time2_ms += delay_ms
+                
+                # Ensure times are not negative
+                time1_ms = max(0, time1_ms)
+                time2_ms = max(0, time2_ms)
+                
+                # Convert back to timecode format
+                h1 = time1_ms // 3600000
+                m1 = (time1_ms % 3600000) // 60000
+                s1 = (time1_ms % 60000) // 1000
+                ms1 = time1_ms % 1000
+                
+                h2 = time2_ms // 3600000
+                m2 = (time2_ms % 3600000) // 60000
+                s2 = (time2_ms % 60000) // 1000
+                ms2 = time2_ms % 1000
+                
+                # Format back to timecode
+                return f"{h1:02d}:{m1:02d}:{s1:02d},{ms1:03d} --> {h2:02d}:{m2:02d}:{s2:02d},{ms2:03d}"
+            
+            # Adjust the timecodes in the content
+            adjusted_content = timecode_pattern.sub(adjust_timecode, content)
+            
+            # Write to output file
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(adjusted_content)
+            
+            # Verify file was created and has content
+            if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                raise RuntimeError("Failed to create valid adjusted SRT file")
+            
+            # Validate the adjusted file
+            with open(output_path, 'r', encoding='utf-8') as f:
+                check_content = f.read()
+                if not timecode_pattern.search(check_content):
+                    logging.warning("No timecodes found in adjusted SRT file")
+                    # If no timecodes found, use original file as fallback
+                    logging.info(f"Using original SRT file as fallback")
+                    return input_path
+                
+                # Verify entries in adjusted file
+                adjusted_entries = re.split(r'\r?\n\r?\n', check_content.strip())
+                if len(adjusted_entries) < 1:
+                    logging.warning("No valid entries in adjusted SRT file, using original")
+                    return input_path
+                    
+                logging.info(f"Adjusted SRT has {len(adjusted_entries)} entries")
+            
+            logging.info(f"SRT adjustment completed, saved to: {output_path}")
+            return output_path
+        except Exception as e:
+            logging.error(f"Error adjusting SRT directly: {e}", exc_info=True)
+            # Fall back to original file if adjustment fails
+            logging.info(f"Using original SRT file as fallback due to error")
+            return input_path
 
     def prompt_for_output_and_generate(self):
         """Main thread: Get output path and start processing"""
@@ -887,8 +939,8 @@ class GUIComponents:
             error_message = str(e)  # Capture the error message
             logging.error(f"Audio generation failed: {error_message}", exc_info=True)
             self.update_status(f"Error: {error_message}", 0)
-            # Use the captured message instead of referencing 'e' directly
-            self.root.after(0, lambda: messagebox.showerror("Error", f"Audio generation failed: {error_message}"))
+            # Use default argument to properly capture the error message in the lambda
+            self.root.after(0, lambda msg=error_message: messagebox.showerror("Error", f"Audio generation failed: {msg}"))
         finally:
             self.running = False
     def generate_audio(self, output_path):
@@ -934,9 +986,8 @@ class GUIComponents:
             self.settings['background_music'] = output_path
         except Exception as e:
             logging.error(f"Audio generation failed: {str(e)}", exc_info=True)
+            # Re-raise the exception to be handled by the caller
             raise
-            #self.root.after(0, messagebox.showerror, "Audio Generation Error", str(e))
-            raise   
 
 
     def check_tts_installation(self):
@@ -1030,26 +1081,31 @@ class GUIComponents:
         """Update language dropdown with available languages"""
         if not langs:
             self.lang_combo.set("fr")
-            return
-            
-        self.lang_combo['values'] = langs
-        self.lang_combo.set(langs[0])
-
-    def _update_model_dropdown(self, models):
-        """Update model dropdown safely"""
-        if not self.root.winfo_exists():
-            return
-        
-        # Re-enable combobox
-        self.model_combo.configure(state='readonly')
-        
-        if models:
-            self.model_combo['values'] = models
-            self.model_var.set(models[0])
         else:
-            self.model_combo.set("No models available")
-            messagebox.showwarning("Models", "No TTS models found. Please install models first.")
-
+            # Update the combobox with available languages
+            self.lang_combo['values'] = langs
+            
+            # Try to keep current language if it's in the list
+            current_lang = self.language_var.get()
+            if current_lang in langs:
+                self.lang_combo.set(current_lang)
+            else:
+                # Default to 'fr' or the first available language
+                default_lang = 'fr' if 'fr' in langs else langs[0]
+                self.lang_combo.set(default_lang)
+                self.language_var.set(default_lang)
+            
+    def _update_model_dropdown(self, models):
+        """Update model dropdown with available models"""
+        if self.model_combo:
+            self.model_combo['values'] = models
+            if models:
+                # Set default model (use 'xtts' if available, otherwise first model)
+                default_model = 'xtts' if 'xtts' in models else models[0]
+                self.model_var.set(default_model)
+            else:
+                self.model_var.set("")
+            self.model_combo.configure(state='readonly')
     def generate_video(self, output_path: str, srt_path: str) -> None:
         """Process subtitle entries into a video with audio"""
         try:
@@ -1061,14 +1117,20 @@ class GUIComponents:
             
             adjusted_srt = srt_path
             if adjusted_srt is None:
-                raise ValueError("SRT adjustment failed, no valid file was produced")
-            if not os.path.exists(adjusted_srt):
-                raise FileNotFoundError("Adjusted SRT file not found or empty")
-
+                adjusted_srt = self.srt_path
+                
             # 2. Parse subtitle entries with time validation
             self.update_status("Parsing subtitles...", 5)
             
             entries = self.srt_parser.parse(adjusted_srt)
+            
+            if not entries:
+                raise ValueError("No valid subtitle entries found in adjusted SRT file")
+            
+            # Validate entries for missing 'start_time' or 'end_time'
+            for i, entry in enumerate(entries):
+                if 'start_time' not in entry or 'end_time' not in entry:
+                    raise ValueError(f"Entry {i + 1} is missing 'start_time' or 'end_time'")
             
             if not entries:
                 raise ValueError("No valid subtitle entries found in adjusted SRT file")

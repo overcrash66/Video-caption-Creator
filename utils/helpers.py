@@ -15,14 +15,14 @@ class TempFileManager:
         self.root_dir = os.path.abspath(root_dir) if root_dir else os.path.abspath("video_gen_temp")
         self.image_dir = os.path.join(self.root_dir, "images")
         self.process_dir = os.path.join(self.root_dir, "process")
+        self.temp_dir = os.path.join(self.root_dir, "temp")
         self.log_file = log_file if log_file else os.path.join(self.root_dir, "srt_converter.log")
         self._stop_event = Event()  # Event to stop the log cleaner thread
         self._init_dirs()
         self._start_log_cleaner()
-
     def _init_dirs(self):
         """Initialize required directories."""
-        for d in [self.image_dir, self.process_dir]:
+        for d in [self.image_dir, self.process_dir, self.temp_dir]:
             os.makedirs(d, exist_ok=True)
 
     def _start_log_cleaner(self):
