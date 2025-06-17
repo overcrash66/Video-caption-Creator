@@ -13,7 +13,7 @@ class SRTParser:
         entries = []
         errors = []
         try:
-            with open(file_path, 'r', encoding='utf-8-sig') as f:
+            with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 raw_entries = re.split(r'\n\s*\n', content.strip())
             

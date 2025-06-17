@@ -713,6 +713,7 @@ class GUIComponents:
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                encoding="utf-8",
                 text=True,
                 timeout=30
             )

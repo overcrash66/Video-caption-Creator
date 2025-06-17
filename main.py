@@ -1,3 +1,5 @@
+import os
+os.environ["PYTHONIOENCODING"] = "utf-8"
 from gui import VideoConverterApp
 import tkinter as tk
 
