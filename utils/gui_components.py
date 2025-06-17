@@ -1,5 +1,6 @@
 # Standard library imports
 import os
+import sys
 import logging
 import threading
 import subprocess
@@ -696,7 +697,6 @@ class GUIComponents:
             adjusted_srt = os.path.join(self.temp_manager.root_dir, "temp.srt")
             
             # Use sys.executable to get the current Python interpreter path
-            import sys
             python_executable = sys.executable
             
             command = [
@@ -708,15 +708,30 @@ class GUIComponents:
             
             logging.info(f"Running command: {' '.join(command)}")
             
-            process = subprocess.run(
-                command,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                encoding="utf-8",
-                text=True,
-                timeout=30
-            )
+            try:
+                result = subprocess.run(
+                    command,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    encoding="utf-8",
+                    text=True,
+                    timeout=30
+                )
+                # Log the output for debugging
+                logging.info(f"SRT adjustment output: {result.stdout}")
+            except UnicodeDecodeError:
+                # Try alternative encoding if UTF-8 fails
+                result = subprocess.run(
+                    command,
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    encoding="cp1252",  # Try Windows default encoding
+                    text=True,
+                    timeout=30
+                )
+                logging.info(f"SRT adjustment output (using alternative encoding): {result.stdout}")
 
             # Verify output file creation
             if not os.path.exists(adjusted_srt):
