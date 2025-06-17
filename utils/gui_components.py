@@ -101,7 +101,8 @@ class GUIComponents:
         self.current_tts = None
         self.model_var = tk.StringVar()
         self.speaker_ref_path = None
-
+        self.generated_audio_path = None
+    
         self.lang_combo = None
         self.language_var = tk.StringVar(value="fr")
 
@@ -682,56 +683,66 @@ class GUIComponents:
     def run_external_script(self, delay: int):
         try:
             self.update_status("Adjusting SRT timings...", 0)
-            # Go up one directory from utils to find processors
-            base_dir = os.path.dirname(os.path.dirname(__file__))
-            script_path = os.path.join(base_dir, "processors", "editSrtFileTime.py")
-
-            if not os.path.exists(script_path):
-                logging.error(f"Script not found at: {script_path}")
-                raise FileNotFoundError(f"Script not found at: {script_path}")
-
             # Create temp directory if not exists
             self.temp_manager._init_dirs()
 
             # Use proper temp file path
             adjusted_srt = os.path.join(self.temp_manager.root_dir, "temp.srt")
             
-            # Use sys.executable to get the current Python interpreter path
-            python_executable = sys.executable
-            
-            command = [
-                python_executable, script_path,
-                self.srt_path,
-                str(delay),
-                adjusted_srt
-            ]
-            
-            logging.info(f"Running command: {' '.join(command)}")
-            
+            # Try to directly import and use the function instead of subprocess
             try:
-                result = subprocess.run(
-                    command,
-                    check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    encoding="utf-8",
-                    text=True,
-                    timeout=30
-                )
-                # Log the output for debugging
-                logging.info(f"SRT adjustment output: {result.stdout}")
-            except UnicodeDecodeError:
-                # Try alternative encoding if UTF-8 fails
-                result = subprocess.run(
-                    command,
-                    check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    encoding="cp1252",  # Try Windows default encoding
-                    text=True,
-                    timeout=30
-                )
-                logging.info(f"SRT adjustment output (using alternative encoding): {result.stdout}")
+                sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+                from processors.editSrtFileTime import adjust_srt_time
+                
+                # Directly call the function
+                adjust_srt_time(self.srt_path, delay, adjusted_srt)
+                logging.info(f"SRT adjustment completed directly: {adjusted_srt}")
+                
+            except ImportError:
+                # Fallback to subprocess with increased timeout
+                base_dir = os.path.dirname(os.path.dirname(__file__))
+                script_path = os.path.join(base_dir, "processors", "editSrtFileTime.py")
+                
+                if not os.path.exists(script_path):
+                    logging.error(f"Script not found at: {script_path}")
+                    raise FileNotFoundError(f"Script not found at: {script_path}")
+                
+                # Use sys.executable to get the current Python interpreter path
+                python_executable = sys.executable
+                
+                command = [
+                    python_executable, script_path,
+                    self.srt_path,
+                    str(delay),
+                    adjusted_srt
+                ]
+                
+                logging.info(f"Running command: {' '.join(command)}")
+                
+                try:
+                    result = subprocess.run(
+                        command,
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        encoding="utf-8",
+                        text=True,
+                        timeout=120  # Increased timeout to 2 minutes
+                    )
+                    # Log the output for debugging
+                    logging.info(f"SRT adjustment output: {result.stdout}")
+                except UnicodeDecodeError:
+                    # Try alternative encoding if UTF-8 fails
+                    result = subprocess.run(
+                        command,
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        encoding="cp1252",  # Try Windows default encoding
+                        text=True,
+                        timeout=120  # Increased timeout to 2 minutes
+                    )
+                    logging.info(f"SRT adjustment output (using alternative encoding): {result.stdout}")
 
             # Verify output file creation
             if not os.path.exists(adjusted_srt):
@@ -844,54 +855,75 @@ class GUIComponents:
             self.root.update_idletasks()
             messagebox.showinfo("Reset Complete", "Application has been reset to default state")        
 
-    def _on_model_selected(self, event=None):
-        """Handle model selection and populate languages"""
-        model = self.model_var.get()
-        if not model:
-            return
-
-        try:
-            # Corrected variable name from current_ts to current_tts
-            self.current_tts = SubToAudio(model_name=model)
-            langs = self.current_tts.languages()
-            
-            self.lang_combo['values'] = langs
-            self.lang_combo.set(langs[0] if langs else "fr")
-            
-        except Exception as e:
-            messagebox.showerror("Model Error", f"Failed to initialize model: {str(e)}")
-            print(f"Error loading model: {str(e)}")  # Debug log   
-
+    # Method moved to a more comprehensive implementation below
     def generate_audio_only(self):
         """Generate audio only"""
         try:
+            # Check prerequisites
+            if not self.srt_path:
+                messagebox.showerror("Error", "Please select an SRT file first")
+                return
+    
+            if not self.current_tts:
+                messagebox.showerror("Error", "Please select a TTS model first")
+                return
+    
             self.update_status("Generating audio...", 0)
             output_path = filedialog.asksaveasfilename(
                 defaultextension=".wav",
                 filetypes=[("WAV files", "*.wav"), ("All files", "*.*")]
             )
-            if output_path:
-                self.generate_audio(output_path)
-                self.update_status("Audio generated successfully!", 100)
-                messagebox.showinfo("Success", f"Audio saved at:\n{output_path}")
+            
+            if not output_path:
+                self.update_status("Audio generation cancelled", 0)
+                return
+                
+            # Call the audio generation method
+            self.generate_audio(output_path)
+            self.update_status("Audio generation complete!", 100)
+            self.root.after(0, lambda: messagebox.showinfo("Success", f"Audio saved to:\n{output_path}"))
+            
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            error_message = str(e)  # Capture the error message
+            logging.error(f"Audio generation failed: {error_message}", exc_info=True)
+            self.update_status(f"Error: {error_message}", 0)
+            # Use the captured message instead of referencing 'e' directly
+            self.root.after(0, lambda: messagebox.showerror("Error", f"Audio generation failed: {error_message}"))
         finally:
             self.running = False
-
     def generate_audio(self, output_path):
         """Generate audio (ensure this is properly synchronous)"""
         if not self.current_tts:
             raise RuntimeError("No TTS model initialized")
         
+        if not self.srt_path or not os.path.exists(self.srt_path):
+            raise RuntimeError("Valid SRT file not found")
+        
         try:
+            # Get language value safely
+            language = self.lang_combo.get() if hasattr(self, 'lang_combo') and self.lang_combo else self.language_var.get()
+            
+            # Prepare conversion parameters
+            convert_params = {
+                'sub_data': self.current_tts.subtitle(self.srt_path),
+                'language': language,
+                'output_path': output_path
+            }
+            
+            # Add speaker_wav only if provided
+            if self.speaker_ref_path:
+                convert_params['speaker_wav'] = self.speaker_ref_path
+                
+            # For XTTS models, we need to handle speaker differently
+            # Only add speaker parameter if we have a reference audio
+            # Otherwise, let the TTS library handle speaker selection
+            if 'xtts' in self.model_var.get().lower() and self.speaker_ref_path:
+                # We don't need to specify 'speaker' when we have speaker_wav
+                # as XTTS will use the reference audio for voice cloning
+                pass
+            
             # Perform actual audio generation
-            self.current_tts.convert_to_audio(
-                sub_data=self.current_tts.subtitle(self.srt_path),
-                language=self.lang_combo.get(),
-                speaker_wav=self.speaker_ref_path,
-                output_path=output_path
-            )
+            self.current_tts.convert_to_audio(**convert_params)
             
             # Verify generation succeeded
             if not os.path.exists(output_path):
@@ -900,9 +932,9 @@ class GUIComponents:
             # Update path only after successful generation
             self.generated_audio_path = output_path
             self.settings['background_music'] = output_path
-            #self.root.after(0, messagebox.showinfo, "Audio Generation complete", str(output_path))
         except Exception as e:
-            logging.error(f"Audio generation failed: {str(e)}")
+            logging.error(f"Audio generation failed: {str(e)}", exc_info=True)
+            raise
             #self.root.after(0, messagebox.showerror, "Audio Generation Error", str(e))
             raise   
 
