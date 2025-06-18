@@ -974,8 +974,21 @@ class GUIComponents:
                 # as XTTS will use the reference audio for voice cloning
                 pass
             
-            # Perform actual audio generation
-            self.current_tts.convert_to_audio(**convert_params)
+            try:
+                # Perform actual audio generation
+                self.current_tts.convert_to_audio(**convert_params)
+            except AttributeError as ae:
+                if "'GPT2InferenceModel' object has no attribute 'generate'" in str(ae):
+                    messagebox.showerror(
+                        "TTS Version Error",
+                        "Your TTS library version is incompatible with XTTS model.\n"
+                        "Please update TTS library by running:\n"
+                        "pip install -U TTS\n\n"
+                        "Or try using a different TTS model."
+                    )
+                    raise RuntimeError("TTS library version incompatible with XTTS model")
+                else:
+                    raise
             
             # Verify generation succeeded
             if not os.path.exists(output_path):
@@ -1028,19 +1041,13 @@ class GUIComponents:
                  
             valid_models = [m for m in model_names if SubToAudio()._model_exists(m)]
             
-            if self.root.winfo_exists():
-                self.root.after(0, self._update_model_dropdown, valid_models)
-                
+            # Update the UI with models in the main thread
+            self.root.after(0, lambda: self._update_model_dropdown(valid_models))
         except Exception as e:
-            logging.error(f"Failed to load models: {str(e)}")
-            if self.root.winfo_exists():
-                self.root.after(0, messagebox.showerror, "Model Load Error", str(e))
-        finally:
-            # Re-enable combobox
-            if self.root.winfo_exists():
-                self.root.after(0, lambda: self.model_combo.configure(state='readonly'))
-                self.root.after(0, lambda: self.model_combo.set("Select a model"))
-
+            logging.error(f"Error loading TTS models: {str(e)}")
+            self.root.after(0, lambda: self.model_combo.configure(state='readonly'))
+            self.root.after(0, lambda: self.model_combo.set("Error loading models"))
+            
     def _on_model_selected(self, event=None):
         """Handle model selection and populate languages"""
         model = self.model_var.get()
@@ -1063,6 +1070,22 @@ class GUIComponents:
 
         def load_model():
             try:
+                # Check if using XTTS model
+                if 'xtts' in model.lower():
+                    # Try to detect TTS version compatibility
+                    try:
+                        from TTS import __version__ as tts_version
+                        from packaging import version
+                        if version.parse(tts_version) < version.parse('0.14.0'):
+                            self.root.after(0, lambda: messagebox.showwarning(
+                                "TTS Version Warning",
+                                f"Your TTS version ({tts_version}) might not be compatible with XTTS model.\n"
+                                "Consider updating with: pip install -U TTS"
+                            ))
+                    except (ImportError, ValueError):
+                        # Can't determine version, continue anyway
+                        pass
+                
                 self.current_tts = SubToAudio(model_name=model)
                 langs = self.current_tts.languages()
                 

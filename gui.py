@@ -30,6 +30,8 @@ class VideoConverterApp:
         self.font_size_var = tk.IntVar(value=24)
         self.output_path_var = tk.StringVar()
         self.srt_path_var = tk.StringVar()
+        
+        self.temp_manager = TempFileManager()
 
     def generate_video(self):
         """
