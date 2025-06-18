@@ -646,15 +646,16 @@ class GUIComponents:
             self.loading_spinner.pack_forget()
             ttk.Label(self.preview_window, text="Failed to generate preview", foreground="red").pack(pady=20)
             self.preview_window.update_idletasks()
-            self.preview_window.after(3000, self.preview_window.destroy)
-        # Close preview window after 3 seconds
-        if self.preview_window:
-            self.preview_window.after(3000, self.preview_window.destroy)
-            self.preview_window = None
+            
+            def close_and_reset():
+                if self.preview_window and self.preview_window.winfo_exists():
+                    self.preview_window.destroy()
+                self.preview_window = None
+
+            self.preview_window.after(3000, close_and_reset)
         else:
             logging.warning("Preview window already closed or not created.")
             self.preview_window = None
-            self.preview_window.destroy()
 
     def start_generation(self):
         self.update_settings()
@@ -886,26 +887,7 @@ class GUIComponents:
             ).start()
         except Exception as e:
             messagebox.showerror("Error", str(e))
-            self.running = False        
-
-    def reset_application(self):
-        if messagebox.askyesno("Confirm Reset", "This will reset all settings and clear temporary files.\nContinue?"):
-            # Cancel operations and clean up
-            self.cancel_generation()
-            self.temp_manager.cleanup()
-            
-            # Destroy existing widgets
-            for widget in self.root.winfo_children():
-                widget.destroy()
-            
-            # Reinitialize entire application
-            self.initialize_app()
-            self.setup_styles()
-            self.create_widgets()
-            
-            # Force UI update
-            self.root.update_idletasks()
-            messagebox.showinfo("Reset Complete", "Application has been reset to default state")        
+            self.running = False
 
     # Method moved to a more comprehensive implementation below
     def generate_audio_only(self):
@@ -1085,39 +1067,88 @@ class GUIComponents:
                     except (ImportError, ValueError):
                         # Can't determine version, continue anyway
                         pass
-                
-                self.current_tts = SubToAudio(model_name=model)
-                langs = self.current_tts.languages()
-                
-                self.root.after(0, lambda: self._update_languages(langs))
-                
-            except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("Model Error", f"Failed to initialize model: {str(e)}"))
-                logging.error(f"Error loading model: {str(e)}")
+
+                try:
+                    self.current_tts = SubToAudio(model_name=model)
+                    langs = self.current_tts.languages()
+                    self.root.after(0, lambda: self._update_languages(langs))
+                except Exception as e:
+                    # Check for JSON decode error (corrupted/empty model files)
+                    import json
+                    import shutil
+                    import re
+                    error_str = str(e)
+                    # Also check for "invalid load key" error (e.g., loading HTML instead of model)
+                    is_corrupted = (
+                        isinstance(e, json.decoder.JSONDecodeError) or
+                        "Expecting value" in error_str or
+                        re.search(r"invalid load key", error_str, re.IGNORECASE)
+                    )
+                    if is_corrupted:
+                        # Try to remove the corrupted model directory
+                        try:
+                            tts_home = self._get_tts_home_path()
+                            model_name_safe = model.replace("/", "--").replace("\\", "--")
+                            
+                            if tts_home and os.path.exists(tts_home):
+                                model_dirs = [d for d in os.listdir(tts_home) if model_name_safe in d]
+                                removed_any = False
+                                for d in model_dirs:
+                                    model_dir = os.path.join(tts_home, d)
+                                    if os.path.exists(model_dir):
+                                        shutil.rmtree(model_dir)
+                                        removed_any = True
+                                        logging.info(f"Removed corrupted model directory: {model_dir}")
+                                
+                                if not removed_any:
+                                    logging.warning(f"No model directory found to remove for corrupted model: {model_name_safe}")
+
+                            self.root.after(0, lambda: messagebox.showerror(
+                                "Corrupted Model",
+                                "The selected TTS model appears to be corrupted or incomplete.\n"
+                                "It has been deleted. Please try selecting the model again to re-download it."
+                            ))
+                        except Exception as cleanup_err:
+                            logging.error(f"Failed to cleanup corrupted model: {cleanup_err}")
+                            self.root.after(0, lambda: messagebox.showerror("Model Error", f"Failed to initialize model and could not clean up cache: {error_str}"))
+                    else:
+                        self.root.after(0, lambda: messagebox.showerror("Model Error", f"Failed to initialize model: {error_str}"))
             finally:
                 self.root.after(0, loading_window.destroy)
-
         # Start loading in background
         threading.Thread(target=load_model, daemon=True).start()
 
+    @staticmethod
+    def _get_tts_home_path():
+        """Get the default TTS installation directory based on the OS."""
+        if sys.platform == "win32":
+            # Windows: %LOCALAPPDATA%/tts
+            path = os.path.join(os.getenv('LOCALAPPDATA', ''), 'tts')
+        elif sys.platform == "darwin":
+            # macOS: ~/Library/Application Support/tts
+            path = os.path.join(os.path.expanduser('~'), 'Library', 'Application Support', 'tts')
+        else:
+            # Linux/other: ~/.local/share/tts
+            path = os.path.join(os.path.expanduser('~'), '.local', 'share', 'tts')
+        return path
+
     def _update_languages(self, langs):
         """Update language dropdown with available languages"""
+        current_lang = self.language_var.get()
         if not langs:
             self.lang_combo.set("fr")
+            self.lang_combo['values'] = []
         else:
             # Update the combobox with available languages
             self.lang_combo['values'] = langs
-            
-            # Try to keep current language if it's in the list
-            current_lang = self.language_var.get()
             if current_lang in langs:
                 self.lang_combo.set(current_lang)
             else:
                 # Default to 'fr' or the first available language
-                default_lang = 'fr' if 'fr' in langs else langs[0]
-                self.lang_combo.set(default_lang)
-                self.language_var.set(default_lang)
-            
+                if 'fr' in langs:
+                    self.lang_combo.set('fr')
+                else:
+                    self.lang_combo.set(langs[0])
     def _update_model_dropdown(self, models):
         """Update model dropdown with available models"""
         if self.model_combo:
